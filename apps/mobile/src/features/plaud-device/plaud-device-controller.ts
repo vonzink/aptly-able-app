@@ -1,0 +1,592 @@
+import { ApiError, type PlaudDeviceClient } from '@aptly/api-client';
+import type { PlaudDeviceSession } from '@aptly/contracts';
+
+import type { PlaudNativePort, PlaudNearbyDevice } from './plaud-native-port';
+
+export type PlaudDevicePhase =
+  | 'unavailable'
+  | 'signed-out'
+  | 'needs-enrollment'
+  | 'idle'
+  | 'preparing'
+  | 'scanning'
+  | 'found'
+  | 'binding'
+  | 'connecting'
+  | 'ready'
+  | 'disconnecting'
+  | 'disconnected'
+  | 'unpairing'
+  | 'unpaired'
+  | 'error';
+
+export interface PlaudDeviceEnrollment {
+  actorId: string;
+  operationId: string | null;
+  status: string | null;
+}
+
+export interface PlaudDeviceSnapshot {
+  phase: PlaudDevicePhase;
+  assignment: PlaudDeviceSession['recorder'] | null;
+  nearby: PlaudNearbyDevice | null;
+  message: string | null;
+  cloudBound: boolean;
+  pairingAttempted: boolean;
+  /** Keep each confirmed release separately so a partial unpair can be retried safely. */
+  release: { cloud: boolean; device: boolean } | null;
+}
+
+export interface PlaudDeviceController {
+  getSnapshot(): PlaudDeviceSnapshot;
+  subscribe(listener: () => void): () => void;
+  setEnrollment(enrollment: PlaudDeviceEnrollment | null): void;
+  scan(): Promise<void>;
+  connect(): Promise<void>;
+  cancel(): void;
+  disconnect(): Promise<void>;
+  unpair(): Promise<void>;
+  dispose(): void;
+}
+
+type Job = { generation: number; abort: AbortController; promise: Promise<void> };
+type Pending<T> = {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+};
+
+class Cancelled extends Error {}
+class DeviceFailure extends Error {}
+
+function pending<T>(): Pending<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  // An event can arrive synchronously during dispatch, before the caller starts waiting.
+  void promise.catch(() => undefined);
+  return { promise, resolve, reject };
+}
+
+const initial: PlaudDeviceSnapshot = {
+  phase: 'signed-out',
+  assignment: null,
+  nearby: null,
+  message: null,
+  cloudBound: false,
+  pairingAttempted: false,
+  release: null,
+};
+
+export function createPlaudDeviceController({
+  client,
+  native,
+  timeouts = {},
+}: {
+  client: PlaudDeviceClient;
+  native: PlaudNativePort;
+  timeouts?: { requestMs?: number; scanMs?: number; handshakeMs?: number; cleanupMs?: number };
+}): PlaudDeviceController {
+  const requestMs = timeouts.requestMs ?? 20_000;
+  const scanMs = timeouts.scanMs ?? 20_000;
+  const handshakeMs = timeouts.handshakeMs ?? 30_000;
+  const cleanupMs = timeouts.cleanupMs ?? 5_000;
+  let snapshot: PlaudDeviceSnapshot = {
+    ...initial,
+    phase: native.isAvailable ? 'signed-out' : 'unavailable',
+  };
+  let enrollment: PlaudDeviceEnrollment | null = null;
+  let generation = 0;
+  let job: Job | null = null;
+  let disposed = false;
+  let nativeStarted = false;
+  let sessionExpiresAt: number | null = null;
+  let cleanup: Promise<void> = Promise.resolve();
+  let subscriptions: { remove(): void }[] = [];
+  let scanned: Pending<PlaudNearbyDevice> | null = null;
+  let handshake: Pending<void> | null = null;
+  let depaired: Pending<void> | null = null;
+  let disconnected: Pending<void> | null = null;
+  let connectionAttempt = false;
+  let bleConnected = false;
+  let boundSerial = false;
+  let penStateReceived = false;
+  let handshakeFailure: DeviceFailure | null = null;
+  const listeners = new Set<() => void>();
+
+  const publish = (next: Partial<PlaudDeviceSnapshot>) => {
+    if (disposed) return;
+    snapshot = { ...snapshot, ...next };
+    listeners.forEach((listener) => listener());
+  };
+  const current = (own: Job) =>
+    !disposed && generation === own.generation && !own.abort.signal.aborted;
+
+  function wait<T>(promise: Promise<T>, own: Job, ms: number, message: string): Promise<T> {
+    if (!current(own)) {
+      void promise.catch(() => undefined);
+      return Promise.reject(new Cancelled());
+    }
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => finish(() => reject(new Cancelled()));
+      const timer = setTimeout(() => finish(() => reject(new DeviceFailure(message))), ms);
+      const finish = (settle: () => void) => {
+        clearTimeout(timer);
+        own.abort.signal.removeEventListener('abort', onAbort);
+        settle();
+      };
+      own.abort.signal.addEventListener('abort', onAbort, { once: true });
+      promise.then(
+        (value) => finish(() => (current(own) ? resolve(value) : reject(new Cancelled()))),
+        (error: unknown) => finish(() => reject(current(own) ? error : new Cancelled())),
+      );
+    });
+  }
+
+  // Native dispatch promises are not connection confirmations. Cleanup is bounded, serial,
+  // and happens before a replacement SDK session is initialized.
+  function queueCleanup() {
+    if (!nativeStarted || !native.isAvailable) return;
+    nativeStarted = false;
+    cleanup = cleanup.then(async () => {
+      for (const stop of [() => native.stopScan(), () => native.disconnect()]) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, cleanupMs);
+          Promise.resolve()
+            .then(stop)
+            .catch(() => undefined)
+            .finally(() => {
+              clearTimeout(timer);
+              resolve();
+            });
+        });
+      }
+    });
+  }
+
+  function clearEvents() {
+    subscriptions.forEach((subscription) => subscription.remove());
+    subscriptions = [];
+    scanned = null;
+    handshake = null;
+    depaired = null;
+    disconnected = null;
+    connectionAttempt = false;
+    bleConnected = false;
+    boundSerial = false;
+    penStateReceived = false;
+    sessionExpiresAt = null;
+  }
+
+  function invalidate() {
+    generation += 1;
+    job?.abort.abort();
+    job = null;
+    clearEvents();
+    queueCleanup();
+  }
+
+  function run(work: (own: Job) => Promise<void>): Promise<void> {
+    if (disposed) return Promise.resolve();
+    if (job) return job.promise;
+    const own: Job = { generation, abort: new AbortController(), promise: Promise.resolve() };
+    job = own;
+    own.promise = Promise.resolve()
+      .then(() => {
+        if (!current(own)) throw new Cancelled();
+        return work(own);
+      })
+      .catch((error: unknown) => {
+        if (!current(own) || error instanceof Cancelled) return;
+        publish({
+          phase: 'error',
+          message:
+            error instanceof DeviceFailure || error instanceof ApiError
+              ? error.message
+              : permissionError(error)
+                ? 'Allow Bluetooth and Nearby devices access in phone settings, then try again.'
+                : 'Recorder setup could not finish. Check your connection and try again.',
+        });
+        invalidate();
+      })
+      .finally(() => {
+        if (job === own) job = null;
+      });
+    return own.promise;
+  }
+
+  function attachEvents(ownGeneration: number) {
+    const isCurrent = () => !disposed && ownGeneration === generation;
+    const ready = () => {
+      if (connectionAttempt && bleConnected && boundSerial && penStateReceived)
+        handshake?.resolve();
+    };
+    subscriptions = [
+      native.addListener('scanResult', ({ devices }) => {
+        if (!isCurrent() || snapshot.phase !== 'scanning' || !snapshot.assignment) return;
+        const assignment = snapshot.assignment;
+        const prefix = assignment.model === 'notepins' ? '882' : '881';
+        const found = devices.find(
+          (device) =>
+            device.uuid.length > 0 &&
+            device.serialNumber === assignment.serial &&
+            device.serialNumber.startsWith(prefix),
+        );
+        if (found) scanned?.resolve({ ...found });
+      }),
+      native.addListener('scanTimeout', ({ reason }) => {
+        if (!isCurrent() || snapshot.phase !== 'scanning') return;
+        scanned?.reject(
+          new DeviceFailure(
+            reason === 'bluetoothNotPoweredOn'
+              ? 'Turn on Bluetooth and allow recorder access, then search again.'
+              : 'Your assigned recorder was not found. Keep it nearby and powered on, then search again.',
+          ),
+        );
+      }),
+      native.addListener('connectState', ({ connected, failed }) => {
+        if (!isCurrent() || !connectionAttempt) return;
+        bleConnected = connected;
+        if (snapshot.phase === 'unpairing') return; // Depair confirmation may follow disconnect.
+        if (snapshot.phase === 'disconnecting') {
+          if (!connected && !failed) disconnected?.resolve();
+          else if (failed)
+            disconnected?.reject(
+              new DeviceFailure('Disconnect could not be confirmed. Try again.'),
+            );
+          return;
+        }
+        if (failed || !connected) {
+          const message = failed
+            ? 'The recorder handshake failed. Keep the recorder nearby and try again.'
+            : 'Your recorder disconnected. Its pairing is saved; reconnect when ready.';
+          if (snapshot.phase === 'connecting') {
+            handshakeFailure = new DeviceFailure(message);
+            handshake?.reject(handshakeFailure);
+          } else if (snapshot.phase === 'ready' || snapshot.phase === 'error') {
+            publish({ phase: 'disconnected', message, nearby: null });
+            invalidate();
+          }
+          return;
+        }
+        ready();
+      }),
+      native.addListener('bind', ({ sn, status }) => {
+        if (!isCurrent() || !connectionAttempt || snapshot.phase !== 'connecting') return;
+        if (sn !== snapshot.assignment?.serial || status !== 0) {
+          boundSerial = false;
+          handshakeFailure = new DeviceFailure(
+            sn !== snapshot.assignment?.serial
+              ? 'The connected recorder did not match your assignment. Search again.'
+              : 'The recorder rejected pairing. If it belongs to another app, unpair it there first.',
+          );
+          handshake?.reject(handshakeFailure);
+          return;
+        }
+        boundSerial = true;
+        ready();
+      }),
+      native.addListener('penState', () => {
+        if (!isCurrent() || !connectionAttempt || snapshot.phase !== 'connecting') return;
+        penStateReceived = true;
+        ready();
+      }),
+      native.addListener('depair', ({ status }) => {
+        if (!isCurrent() || snapshot.phase !== 'unpairing') return;
+        if (status === 0) depaired?.resolve();
+        else depaired?.reject(new DeviceFailure('The recorder did not confirm unpairing.'));
+      }),
+    ];
+  }
+
+  function canScan() {
+    return (
+      native.isAvailable &&
+      enrollment?.operationId &&
+      enrollment.status === 'pending' &&
+      !job &&
+      !disposed
+    );
+  }
+
+  function scan() {
+    if (!canScan()) return Promise.resolve();
+    invalidate();
+    return run(async (own) => {
+      if (snapshot.phase === 'unpaired') publish({ release: null, pairingAttempted: false });
+      publish({ phase: 'preparing', nearby: null, message: null });
+      await wait(
+        cleanup,
+        own,
+        cleanupMs * 3,
+        'The previous Bluetooth session is still closing. Try again.',
+      );
+      const capability = await wait(
+        client.capabilities({ signal: own.abort.signal }),
+        own,
+        requestMs,
+        'The recorder service did not respond. Check your connection and try again.',
+      );
+      if (!capability.available)
+        throw new DeviceFailure(
+          capability.reason === 'not_configured'
+            ? 'Recorder connection is not configured on the server yet. Try again after setup is complete.'
+            : 'The recorder service is temporarily unavailable. Try again.',
+        );
+      const session = await wait(
+        client.session(enrollment!.operationId!, { signal: own.abort.signal }),
+        own,
+        requestMs,
+        'Your recorder session could not be prepared. Check your connection and try again.',
+      );
+      if (
+        session.userId !== enrollment?.actorId ||
+        !['notepro', 'notepins'].includes(session.recorder.model) ||
+        Date.parse(session.expiresAt) <= Date.now()
+      )
+        throw new DeviceFailure(
+          'Your recorder session is no longer valid. Sign in again and retry.',
+        );
+      publish({ assignment: { ...session.recorder } });
+      sessionExpiresAt = Date.parse(session.expiresAt);
+      nativeStarted = true;
+      await wait(
+        native.initSDK({
+          userAccessToken: session.userAccessToken,
+          customDomain: session.customDomain,
+          userId: session.userId,
+        }),
+        own,
+        requestMs,
+        'Bluetooth setup did not finish. Check permissions and try again.',
+      );
+      attachEvents(own.generation);
+      scanned = pending<PlaudNearbyDevice>();
+      publish({ phase: 'scanning' });
+      const [, found] = await wait(
+        Promise.all([native.startScan(), scanned.promise]),
+        own,
+        scanMs,
+        'Your assigned recorder was not found. Keep it nearby and powered on, then search again.',
+      );
+      await wait(native.stopScan(), own, requestMs, 'Bluetooth search could not stop. Try again.');
+      publish({ phase: 'found', nearby: found });
+      scanned = null;
+    });
+  }
+
+  function connect() {
+    if (snapshot.phase !== 'found' || !snapshot.nearby || !enrollment?.operationId || job)
+      return Promise.resolve();
+    const device = snapshot.nearby;
+    const operationId = enrollment.operationId;
+    const actorId = enrollment.actorId;
+    return run(async (own) => {
+      if (sessionExpiresAt === null || sessionExpiresAt <= Date.now())
+        throw new DeviceFailure(
+          'Your recorder session expired. Search again to prepare a fresh connection.',
+        );
+      publish({ phase: 'binding', message: null, pairingAttempted: true });
+      // Once cloud release succeeded, reconnect only to finish device unpairing.
+      if (!snapshot.release?.cloud) {
+        await wait(
+          client.bind(operationId, { signal: own.abort.signal }),
+          own,
+          requestMs,
+          'Cloud pairing could not be confirmed. Try again, or unpair to release the recorder.',
+        );
+        publish({ cloudBound: true });
+      }
+      bleConnected = false;
+      boundSerial = false;
+      penStateReceived = false;
+      handshakeFailure = null;
+      handshake = pending<void>();
+      connectionAttempt = true;
+      publish({ phase: 'connecting' });
+      await wait(
+        Promise.all([
+          native.connectBleDevice({ uuid: device.uuid, deviceToken: actorId }),
+          handshake.promise,
+        ]),
+        own,
+        handshakeMs,
+        'Secure setup was not confirmed. Keep the recorder nearby and try connecting again.',
+      );
+      if (handshakeFailure) throw handshakeFailure;
+      if (!bleConnected || !boundSerial || !penStateReceived)
+        throw new DeviceFailure('Secure setup was interrupted. Reconnect and try again.');
+      publish({
+        phase: 'ready',
+        message: snapshot.release ? 'Reconnected. Finish unpairing below.' : null,
+      });
+      handshake = null;
+    });
+  }
+
+  function disconnect() {
+    if (!native.isAvailable || disposed || job || !connectionAttempt) return Promise.resolve();
+    return run(async (own) => {
+      publish({ phase: 'disconnecting', message: null });
+      disconnected = pending<void>();
+      await wait(
+        Promise.all([native.disconnect(), disconnected.promise]),
+        own,
+        requestMs,
+        'Disconnect was not confirmed. Keep the recorder nearby and try again.',
+      );
+      clearEvents();
+      nativeStarted = false;
+      publish({
+        phase: 'disconnected',
+        nearby: null,
+        message: 'Pairing is saved. Reconnect when ready.',
+      });
+    });
+  }
+
+  function unpair() {
+    if (!native.isAvailable || disposed || job || !enrollment?.operationId)
+      return Promise.resolve();
+    const operationId = enrollment.operationId;
+    return run(async (own) => {
+      const previous = snapshot.release ?? { cloud: false, device: false };
+      publish({ phase: 'unpairing', message: null, release: { ...previous } });
+      depaired = pending<void>();
+      const releaseCloud = async () => {
+        if (previous.cloud) return;
+        await wait(
+          client.unbind(operationId, { signal: own.abort.signal }),
+          own,
+          requestMs,
+          'Cloud release was not confirmed.',
+        );
+        publish({ cloudBound: false, release: { ...snapshot.release!, cloud: true } });
+      };
+      const releaseDevice = async () => {
+        if (previous.device) return;
+        if (!connectionAttempt || !bleConnected)
+          throw new DeviceFailure('Reconnect the recorder to finish device unpairing.');
+        try {
+          await wait(
+            Promise.all([native.unpair(), depaired!.promise]),
+            own,
+            requestMs,
+            'Device unpairing was not confirmed.',
+          );
+          publish({ release: { ...snapshot.release!, device: true } });
+        } finally {
+          // Android requires a disconnect after depair, including timeout/failure.
+          // Cancellation also queues native cleanup, so stale jobs cannot change the UI.
+          if (current(own)) {
+            await wait(native.disconnect(), own, cleanupMs, 'Bluetooth cleanup timed out.').catch(
+              () => undefined,
+            );
+            if (current(own)) {
+              bleConnected = false;
+              connectionAttempt = false;
+            }
+          }
+        }
+      };
+      // Try both sides even if one fails. Confirmations, including a device callback that
+      // precedes the cloud response, remain visible and only unfinished work is retried.
+      await Promise.allSettled([releaseCloud(), releaseDevice()]);
+      if (!current(own)) return;
+      depaired = null;
+      clearEvents();
+      if (snapshot.release?.cloud && snapshot.release.device) {
+        queueCleanup();
+        publish({
+          phase: 'unpaired',
+          nearby: null,
+          cloudBound: false,
+          message: 'Cloud and recorder unpairing confirmed.',
+        });
+      } else {
+        const cloud = snapshot.release?.cloud;
+        const device = snapshot.release?.device;
+        publish({
+          phase: 'error',
+          message: cloud
+            ? enrollment?.status === 'pending'
+              ? 'Cloud release is complete. Reconnect your recorder, then retry device unpairing.'
+              : 'Cloud release is complete. Device unpairing is not confirmed. Ask for a new valid enrollment to reconnect and finish; do not uninstall yet.'
+            : device
+              ? 'The recorder is unpaired locally. Retry cloud release when your internet connection is available.'
+              : 'Unpairing is incomplete. Reconnect your recorder, then retry the unfinished steps.',
+        });
+      }
+    });
+  }
+
+  return {
+    getSnapshot: () => snapshot,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setEnrollment(next) {
+      if (
+        enrollment?.actorId === next?.actorId &&
+        enrollment?.operationId === next?.operationId &&
+        enrollment?.status === next?.status
+      )
+        return;
+      invalidate();
+      enrollment = next ? { ...next } : null;
+      publish({
+        ...initial,
+        phase: !native.isAvailable
+          ? 'unavailable'
+          : !next
+            ? 'signed-out'
+            : !next.operationId
+              ? 'needs-enrollment'
+              : next.status === 'pending'
+                ? 'idle'
+                : 'error',
+        message:
+          next?.operationId && next.status !== 'pending'
+            ? 'This enrollment is no longer active. You can request cloud release, but device unpairing needs a new valid enrollment to reconnect. Do not uninstall until both releases are confirmed.'
+            : null,
+      });
+    },
+    scan,
+    connect,
+    cancel() {
+      const wasUnpairing = snapshot.phase === 'unpairing';
+      invalidate();
+      publish({
+        phase: wasUnpairing ? 'error' : 'idle',
+        nearby: null,
+        message: wasUnpairing
+          ? 'Unpairing was interrupted. Some release steps may have completed; reconnect and retry to confirm.'
+          : snapshot.cloudBound
+            ? 'Connection cancelled. Cloud pairing is saved; reconnect or unpair when ready.'
+            : 'Recorder setup cancelled.',
+      });
+    },
+    disconnect,
+    unpair,
+    dispose() {
+      invalidate();
+      disposed = true;
+      enrollment = null;
+      snapshot = { ...initial };
+      listeners.clear();
+    },
+  };
+}
+
+function permissionError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ERR_PLAUD_PERMISSIONS'
+  );
+}

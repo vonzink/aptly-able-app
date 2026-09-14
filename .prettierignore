@@ -1,0 +1,11 @@
+node_modules
+**/dist
+**/.expo
+**/expo-env.d.ts
+pnpm-lock.yaml
+design_handoff_aptly_able_mobile
+aptly-able-app-handoff
+plaude intergration
+*.zip
+# Preserve the pinned upstream SDK module; application integration is formatted separately.
+apps/mobile/modules/plaud-sdk

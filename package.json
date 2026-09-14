@@ -1,0 +1,48 @@
+{
+  "name": "aptly-able-mobile-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.13.0 <25"
+  },
+  "scripts": {
+    "android:emulator": "node scripts/android-preview.mjs emulator",
+    "android:preview": "node scripts/android-preview.mjs run",
+    "android:preview:build": "node scripts/android-preview.mjs build",
+    "dev:phone-api": "node scripts/dev-phone-api.mjs",
+    "native:check:ios": "node scripts/check-plaud-sdk.mjs ios",
+    "native:check:android": "node scripts/check-plaud-sdk.mjs android",
+    "dev:api": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api dev",
+    "dev:mobile": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api-client build && pnpm --filter @aptly/mobile start",
+    "dev:web": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api-client build && pnpm --filter @aptly/mobile web",
+    "build": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api-client build && pnpm --filter @aptly/api build && pnpm --filter @aptly/admin build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "lint": "eslint apps packages scripts && node scripts/verify-boundaries.mjs",
+    "format": "prettier --write apps packages scripts *.json *.mjs *.yaml README.md",
+    "format:check": "prettier --check apps packages scripts *.json *.mjs *.yaml README.md",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:migrate": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api db:migrate",
+    "db:seed-dev": "pnpm --filter @aptly/api db:seed-dev",
+    "test:api-smoke": "pnpm build && node apps/api/test/runtime-smoke.mjs",
+    "dev:admin": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api-client build && pnpm --filter @aptly/admin dev",
+    "dev:setup": "node scripts/setup-local.mjs",
+    "android:pilot": "node scripts/android-pilot.mjs",
+    "pilot:package": "node scripts/package-pilot.mjs",
+    "ios:pilot": "node scripts/ios-pilot.mjs"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "5.0.0",
+    "eslint": "10.10.0",
+    "@eslint/js": "10.0.1",
+    "typescript-eslint": "8.70.0",
+    "prettier": "3.9.6",
+    "@types/node": "24.13.4"
+  }
+}

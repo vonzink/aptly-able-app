@@ -1,0 +1,16 @@
+# Merge with compose.yaml only after checking the existing host's ports/networks.
+# Keep Vaultwarden's current HTTPS proxy; do not start another listener on 80/443.
+services:
+  postgres:
+    mem_limit: 256m
+    cpus: '0.50'
+    command: [postgres, -c, shared_buffers=64MB, -c, max_connections=30]
+  api:
+    mem_limit: 384m
+    cpus: '0.75'
+    ports:
+      - '127.0.0.1:${PILOT_API_PORT:-4180}:4100'
+    environment:
+      TRUSTED_PROXY_IP: ${SHARED_PROXY_IP:?Set the verified source IP of the existing reverse proxy}
+  web:
+    profiles: [dedicated-host-only]

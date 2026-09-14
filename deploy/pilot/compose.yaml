@@ -1,0 +1,87 @@
+name: aptly-able-pilot
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aptly_pilot
+      POSTGRES_USER: aptly_pilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a private database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      pilot:
+        ipv4_address: 172.30.45.2
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U aptly_pilot -d aptly_pilot']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    image: aptly-able-pilot-api:${RELEASE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/pilot/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4100
+      PILOT_AUTH_ENABLED: 'true'
+      DATABASE_URL: postgresql://aptly_pilot:${POSTGRES_PASSWORD:?Set a private database password}@postgres:5432/aptly_pilot
+      BROWSER_ORIGINS: ${PUBLIC_ORIGIN:?Set the public HTTPS origin}
+      ENROLLMENT_BASE_URL: ${PUBLIC_ORIGIN:?Set the public HTTPS origin}/enroll
+      TRUSTED_PROXY_IP: 172.30.45.3
+      RECORDINGS_DIRECTORY: /data/recordings
+      PLAUD_CLIENT_ID: ${PLAUD_CLIENT_ID:?Set the Plaud client ID}
+      PLAUD_CLIENT_SECRET: ${PLAUD_CLIENT_SECRET:?Set the Plaud client secret}
+      PLAUD_REGION: ${PLAUD_REGION:-us}
+    volumes:
+      - recordings-data:/data/recordings
+    networks:
+      pilot:
+        ipv4_address: 172.30.45.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4100/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  web:
+    image: aptly-able-pilot-gateway:${RELEASE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/pilot/gateway.Dockerfile
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set hostname without https prefix}
+    ports:
+      - '${HTTP_BIND:-0.0.0.0}:80:80'
+      - '${HTTP_BIND:-0.0.0.0}:443:443'
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      pilot:
+        ipv4_address: 172.30.45.3
+    depends_on:
+      api:
+        condition: service_healthy
+networks:
+  pilot:
+    ipam:
+      config:
+        - subnet: 172.30.45.0/24
+volumes:
+  postgres-data:
+  recordings-data:
+  caddy-data:
+  caddy-config:

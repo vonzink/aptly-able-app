@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/*.log
+.git
+.local
+.agents
+docs
+aptly-able-app-handoff
+apps/mobile
+**/.expo
+**/coverage
+output
+.playwright-cli
+deploy/pilot/downloads

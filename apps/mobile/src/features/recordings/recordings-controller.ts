@@ -1,0 +1,292 @@
+import {
+  assertLocalRecording,
+  validateAudioImport,
+  validateTitle,
+  validateRecordingNotes,
+  sourceKey,
+  type PlaudRecordingSource,
+  type AudioImport,
+  type LocalRecording,
+  type RecordingStore,
+  type RecordingPatch,
+} from './recording-model';
+import { parseTranscript } from './transcript-parser';
+
+export interface RecordingsSnapshot {
+  recordings: LocalRecording[];
+  unavailableCount: number;
+  loading: boolean;
+  busy: boolean;
+  error: string | null;
+}
+export interface RecordingsController {
+  getSnapshot(): RecordingsSnapshot;
+  subscribe(listener: () => void): () => void;
+  initialize(): Promise<void>;
+  reload(): Promise<void>;
+  importAudio(input: AudioImport): Promise<string | null>;
+  importDeviceAudio(input: AudioImport, source: PlaudRecordingSource): Promise<string | null>;
+  isSourceDismissed(source: PlaudRecordingSource): Promise<boolean>;
+  keepOnPhone(id: string): Promise<boolean>;
+  restoreDeviceAudio(id: string, input: AudioImport, keep: boolean): Promise<boolean>;
+  clearTemporaryAudio(): Promise<boolean>;
+  rename(id: string, title: string): Promise<boolean>;
+  saveDetails(id: string, details: { title: string; notes: string }): Promise<boolean>;
+  remove(id: string): Promise<boolean>;
+  attachTranscript(id: string, fileName: string, text: string): Promise<boolean>;
+  setDuration(id: string, seconds: number): Promise<void>;
+  clearError(): void;
+}
+
+export function createRecordingsController({
+  store,
+  createId,
+  now,
+}: {
+  store: RecordingStore;
+  createId: () => string;
+  now: () => string;
+}): RecordingsController {
+  let snapshot: RecordingsSnapshot = {
+    recordings: [],
+    unavailableCount: 0,
+    loading: false,
+    busy: false,
+    error: null,
+  };
+  const listeners = new Set<() => void>();
+  let queue = Promise.resolve();
+  let pending = 0;
+  let initialized = false;
+  let initialization: Promise<void> | undefined;
+
+  function publish(update: Partial<RecordingsSnapshot>) {
+    snapshot = { ...snapshot, ...update };
+    for (const listener of listeners) listener();
+  }
+
+  function run<T>(
+    operation: () => Promise<T>,
+    fallback: T,
+    message: string,
+    exposeError = false,
+  ): Promise<T> {
+    pending += 1;
+    publish({ busy: true, error: null });
+    const next = queue.then(async () => {
+      try {
+        return await operation();
+      } catch (error) {
+        publish({ error: exposeError && error instanceof Error ? error.message : message });
+        return fallback;
+      } finally {
+        pending -= 1;
+        publish({ busy: pending > 0 });
+      }
+    });
+    queue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  function find(id: string) {
+    const record = snapshot.recordings.find((item) => item.id === id);
+    if (!record) throw new Error('This recording is no longer in your local library.');
+    return record;
+  }
+
+  async function update(id: string, patch: RecordingPatch) {
+    find(id);
+    const next = await store.update(id, patch);
+    assertLocalRecording(next);
+    publish({
+      recordings: snapshot.recordings.map((record) => (record.id === id ? next : record)),
+    });
+    return true;
+  }
+
+  async function refreshLibrary() {
+    const result = store.readLibrary
+      ? await store.readLibrary()
+      : { recordings: await store.list(), unavailableCount: 0 };
+    result.recordings.forEach(assertLocalRecording);
+    result.recordings.sort((left, right) => right.importedAt.localeCompare(left.importedAt));
+    publish(result);
+  }
+
+  function reload(): Promise<void> {
+    return run(
+      async () => {
+        publish({ loading: true });
+        try {
+          await refreshLibrary();
+          initialized = true;
+        } finally {
+          publish({ loading: false });
+        }
+      },
+      undefined,
+      "Couldn't load your local recordings. Try again.",
+    );
+  }
+
+  function importAudio(input: AudioImport, source?: PlaudRecordingSource) {
+    return run(
+      async () => {
+        if (source) {
+          if (await store.deviceAudio?.isDismissed(source))
+            throw new Error('This recording was deleted from the app.');
+          const existing = snapshot.recordings.find(
+            (record) => record.source && sourceKey(record.source) === sourceKey(source),
+          );
+          if (existing) return existing.id;
+          if (snapshot.unavailableCount > 0)
+            throw new Error(
+              'Some saved recordings could not be read. Refresh your library before receiving new recordings.',
+            );
+        }
+        const mimeType = validateAudioImport(input);
+        const record: LocalRecording = {
+          id: createId(),
+          title: validateTitle(input.name.replace(/\.[^.]+$/, '').slice(0, 200)),
+          originalName: input.name,
+          importedAt: now(),
+          sizeBytes: input.sizeBytes,
+          mimeType,
+          durationSeconds: null,
+          transcript: null,
+          ...(source ? { source, retention: 'temporary' as const } : {}),
+        };
+        assertLocalRecording(record);
+        await store.saveAudio(record, input);
+        if (source) await refreshLibrary();
+        else publish({ recordings: [record, ...snapshot.recordings] });
+        return record.id;
+      },
+      null,
+      "Couldn't save the received recording. Try again.",
+      true,
+    );
+  }
+
+  return {
+    getSnapshot: () => snapshot,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    initialize() {
+      if (initialized) return Promise.resolve();
+      initialization ??= reload().finally(() => {
+        initialization = undefined;
+      });
+      return initialization;
+    },
+    reload,
+    importAudio: (input) => importAudio(input),
+    importDeviceAudio: (input, source) => importAudio(input, source),
+    isSourceDismissed: (source) => store.deviceAudio?.isDismissed(source) ?? Promise.resolve(false),
+    keepOnPhone(id) {
+      return run(
+        async () => {
+          find(id);
+          if (!store.deviceAudio)
+            throw new Error('Keeping recorder audio offline requires the phone app.');
+          await store.deviceAudio.keep(id);
+          await refreshLibrary();
+          return true;
+        },
+        false,
+        "Couldn't keep this recording offline. Try again.",
+        true,
+      );
+    },
+    restoreDeviceAudio(id, input, keep) {
+      return run(
+        async () => {
+          find(id); // A deletion queued during transfer must not recreate the recording.
+          if (!store.deviceAudio) throw new Error('Loading recorder audio requires the phone app.');
+          await store.deviceAudio.restore(id, input, keep);
+          await refreshLibrary();
+          return true;
+        },
+        false,
+        "Couldn't receive this recording.",
+        true,
+      );
+    },
+    clearTemporaryAudio() {
+      return run(
+        async () => {
+          if (!store.deviceAudio) return false;
+          await store.deviceAudio.clearTemporary();
+          await refreshLibrary();
+          return true;
+        },
+        false,
+        "Couldn't clear temporary audio. Try again.",
+      );
+    },
+    rename(id, title) {
+      return run(
+        () => update(id, { title: validateTitle(title) }),
+        false,
+        "Couldn't rename this recording.",
+        true,
+      );
+    },
+    saveDetails(id, details) {
+      return run(
+        () =>
+          update(id, {
+            title: validateTitle(details.title),
+            notes: validateRecordingNotes(details.notes),
+          }),
+        false,
+        "Couldn't save your title and notes. Your edits are still here; try again.",
+      );
+    },
+    remove(id) {
+      return run(
+        async () => {
+          find(id);
+          await store.remove(id);
+          publish({ recordings: snapshot.recordings.filter((record) => record.id !== id) });
+          return true;
+        },
+        false,
+        "Couldn't remove this recording. Try again.",
+      );
+    },
+    attachTranscript(id, fileName, source) {
+      return run(
+        () =>
+          update(id, {
+            transcript: { fileName, ...parseTranscript(fileName, source), importedAt: now() },
+          }),
+        false,
+        "Couldn't save this transcript.",
+        true,
+      );
+    },
+    setDuration(id, seconds) {
+      return run(
+        async () => {
+          if (!Number.isFinite(seconds) || seconds < 0) return;
+          const record = snapshot.recordings.find((item) => item.id === id);
+          if (!record || record.durationSeconds === seconds) return;
+          await update(id, { durationSeconds: seconds });
+        },
+        undefined,
+        "Couldn't save the recording duration.",
+      );
+    },
+    clearError() {
+      if (snapshot.error) publish({ error: null });
+    },
+  };
+}

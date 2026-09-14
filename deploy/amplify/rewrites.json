@@ -1,0 +1,4 @@
+[
+  { "source": "/enroll", "target": "/index.html", "status": "200" },
+  { "source": "/enroll/", "target": "/index.html", "status": "200" }
+]

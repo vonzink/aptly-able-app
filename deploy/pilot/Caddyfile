@@ -1,0 +1,15 @@
+{$SITE_ADDRESS} {
+  header {
+    Referrer-Policy no-referrer
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+  @api path /v1/* /health/*
+  handle @api {
+    reverse_proxy api:4100
+  }
+  handle {
+    respond "Aptly Able API" 404
+  }
+}

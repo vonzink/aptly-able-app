@@ -1,0 +1,9 @@
+{
+  "android": {
+    "path": "android/libs/plaud-sdk.aar",
+    "sha256": "d342c8ca58a7326fb4f11e73ce23e00ae21a83c4bc399d869835e14013c6ab02",
+    "sourceCommit": "c5111a44938b8739313dcb5f105f696c6af8ad8d",
+    "source": "https://github.com/JinpeiHan/plaud-sdk",
+    "provenance": "android/libs/SDK_PROVENANCE.md"
+  }
+}
