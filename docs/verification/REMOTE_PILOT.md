@@ -6,7 +6,10 @@
   us-west-2; deployment 4 SUCCEED. Website and both enrollment routes match the
   published archive. Android version 0.1.0, build 4 is available for download.
 - Backend: https://api.plaud.aptlyable.info on Ohio EC2
-  `i-066c05c21f8aa2665`, Elastic IP `3.142.86.151`.
+  `i-066c05c21f8aa2665`, Elastic IP `3.142.86.151`. Backend release
+  `20260914-pool-9ec1539` deployed at 23:40 UTC with separate database pools.
+  [Release checks and rollback](2026-09-14-backend-pool-isolation.md) record the
+  live authenticated checks and preserved recorder assignment.
 - `/health/ready` returns `{"status":"ok"}`. `/v1/auth/config` returns pilot
   enabled and development disabled. HTTPS certificates validate normally.
 - During the initial deployment, Caddy was validated and reloaded with an added API hostname. Vaultwarden HTTPS
@@ -22,8 +25,8 @@
 - Job 4 publishes the UX cleanup, model-specific device photos, animated status
   meters, recording controls, and local recording titles/notes. Notes can use the
   phone keyboard's dictation; they are not uploaded to the server.
-- The Amplify website/download package and Zachary's installed iPhone app were
-  updated. No backend, database, DNS or Vaultwarden change was made. Mobile/admin
+- The build 4 update changed the Amplify website/download package and Zachary's
+  installed iPhone app. That release did not update the backend. Mobile/admin
   typechecks, scoped UI lint, import boundaries, native release builds, signing,
   bundle checks and live artifact checks passed. Automated suites and physical
   Plaud acceptance were not rerun.
@@ -70,8 +73,10 @@ not been accepted. The emulator cannot prove those behaviors.
 iOS: `.local/remote-pilot/ios/AptlyAble-2026-09-14T22-20-41-099Z.xcarchive`.
 Version 0.1.0, build 4 was signed and installed on Zachary's registered iPhone
 with Wi-Fi transfer capabilities enabled. Installation and app inventory were
-confirmed; launch was blocked by the locked phone and physical Wi-Fi transfer
-was not tested. Evidence: `.local/web-distribution/20260914T222020Z/`.
+confirmed. The initial launch was blocked by the locked phone; the later
+[account recovery](2026-09-14-recorder-account-recovery.md) successfully opened
+the enrollment link in the installed app. Physical reconnection and Wi-Fi
+transfer still need acceptance. Build evidence: `.local/web-distribution/20260914T222020Z/`.
 
 An App Store distribution export was uploaded to App Store Connect as
 **AA FieldSense**, app ID `6812058827`, version 0.1.0, build 3. Upload succeeded;
@@ -84,14 +89,16 @@ iPhone installations can still use enrollment links.
 
 1. Open the website and create an account; keep the password (no reset flow yet).
 2. Assign a Plaud NotePin S to yourself using its complete printed serial.
-3. Select Android and generate the enrollment QR. Scan on the phone, or open the
-   setup link directly if already using the phone browser.
+3. Select Android and generate the enrollment QR. On the same phone, tap
+   **Open setup** beside the QR; a computer is not required. If using a computer,
+   scan its QR with the phone instead.
 4. Download and install the APK. Return to the same setup page and tap
    **Continue setup in Aptly Able**.
 5. Sign into the app with the same account. Accept the assignment, allow
    Bluetooth, and connect the powered-on nearby recorder.
 6. Record a short conversation, stop recording, and verify automatic transfer,
-   playback/export/deletion and reconnection on that physical Android phone.
+   playback, offline retention, deletion and reconnection on that physical
+   Android phone. Export to Files/share is still an open audit item.
 
 ## Remaining work and limits
 
@@ -109,7 +116,7 @@ iPhone installations can still use enrollment links.
 Operational details and rollback: `../EXISTING_EC2_PILOT.md`. Amplify/DNS details:
 `../AMPLIFY_PILOT.md`. Android/iOS signing details: `../ANDROID_PILOT.md` and
 `../IOS_PILOT.md`. Private runtime files and signing keys are outside every public
-website archive. The standalone repository contains README and `.gitignore`
-committed through `83e9102`; other app source remains untracked. No push was made
-for this update. The ignored source snapshot above records the released source
-independently of Git until the application source is committed.
+website archive. The standalone application source is committed and pushed in
+`9ec1539`; the recovered audit and remaining-work list were pushed in `d19e0c3`.
+The backend image records source revision `9ec1539`. The ignored source snapshot
+above also preserves the earlier build 4 input independently of Git.

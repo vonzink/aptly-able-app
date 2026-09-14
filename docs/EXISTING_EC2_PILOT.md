@@ -58,18 +58,25 @@ Use the inspected host details below for this deployment.
 - Preserve existing mail, root-domain and Vaultwarden DNS records. A wildcard
   Porkbun parking record can coexist with a new exact `plaud` record.
 
-## Deployed September 14, 2026
+## Current deployment — September 14, 2026
 
 - AWS account `816069168722` (Vantedges Technologies), region `us-east-2`.
 - Instance `i-066c05c21f8aa2665`, `aptlyable-vaultwarden-prod-01`, Ubuntu 24.04,
   `t3.small`; Elastic IP `3.142.86.151`.
 - SSH user `ubuntu`, local key
   `/Users/zacharyzink/AptlyAble/Security/aptlyable-vaultwarden-admin.pem`.
-- Release `/opt/aptly-able-pilot/releases/2026-09-14-1805`; `current` points here.
+- Release `/opt/aptly-able-pilot/releases/20260914T225356Z-pool-9ec1539`;
+  `current` points here after the 23:40 UTC backend update.
   Private environment is `current/deploy/pilot/.env` (mode 600).
-- Image `aptly-able-pilot-api:2026-09-14-amd64`, built on the Mac for Linux/amd64
-  and loaded on EC2. Source bundle and image archive are retained in
-  `/opt/aptly-able-pilot/`. No builds ran on the small EC2 host.
+- Image `aptly-able-pilot-api:20260914-pool-9ec1539`, built on the Mac for
+  Linux/amd64 from source `9ec1539` and loaded on EC2. The image archive and
+  source archive are retained in the release directory. No builds ran on EC2.
+  The old release `2026-09-14-1805` and image `2026-09-14-amd64` remain for rollback.
+- The API uses separate pools of 2 ordinary, 2 device and 1 worker connections.
+  Only the API container was replaced. No migration, database restart, DNS or
+  Caddy change was needed. A user-approved temporary SSH rule was removed after
+  deployment, restoring the original four inbound rules.
+  See [deployment verification and rollback](verification/2026-09-14-backend-pool-isolation.md).
 - Postgres and API use only `aptly-able-pilot_pilot`, subnet `172.30.45.0/24`.
   Host traffic reaches the API from `172.30.45.1`; this exact IP is trusted.
   Database migrations 001–004 were applied to the new pilot database.

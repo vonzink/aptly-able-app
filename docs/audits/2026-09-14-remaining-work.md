@@ -1,9 +1,10 @@
 # Remaining work from the codebase and UX audits
 
 Reconciled September 14, 2026, against source commit `9ec1539`, the cleanup
-reports, build 4 release evidence, and read-only inspection of the live backend.
-GitHub `main` was confirmed at the same commit. This pass creates a work list;
-it does not implement fixes, deploy services, or run test suites.
+reports, build 4 release evidence, and inspection of the live backend. The
+initial list was pushed in `d19e0c3`. Item 1 was subsequently deployed at 23:40 UTC;
+its status below includes the deployment checks. Broad regression suites and
+physical-device acceptance remain deferred.
 
 Sources:
 
@@ -17,6 +18,7 @@ Sources:
   [device/recording polish](2026-09-14-device-recording-polish.md).
 - [Current release record](../verification/REMOTE_PILOT.md) and
   [original-account recovery](../verification/2026-09-14-recorder-account-recovery.md).
+- [Backend pool-isolation deployment](../verification/2026-09-14-backend-pool-isolation.md).
 
 Historical reports saying “not built,” “not deployed,” or “untracked” describe
 their original pass. Build 4 subsequently shipped the mobile and dashboard
@@ -27,18 +29,24 @@ physical acceptance are separate questions, as noted below.
 
 ### 1. Release the existing database-capacity fix
 
-**Status: implemented and regression-tested earlier; not deployed to the live API.**
+**Status: deployed; targeted release checks passed. Physical concurrency acceptance remains open.**
 Source: code audit C2.
 
 `apps/api/src/infrastructure/database.ts` now separates ordinary requests,
 device operations and transcription into pools of 2, 2 and 1 connections.
-`apps/api/src/bootstrap/server.ts` wires these independently. Live inspection
-found the old single pool of 2 connections shared by all three workloads.
+`apps/api/src/bootstrap/server.ts` wires these independently. The initial live
+inspection found the old shared pool. Release `20260914-pool-9ec1539` now runs
+the corrected backend on EC2.
 
-- [ ] Build and release the current backend as a separate, reversible deployment.
-- [ ] Verify ordinary authenticated requests and readiness during slow concurrent
-  Plaud operations, using the configured connection budget.
-- [ ] Preserve the shared Vaultwarden host and existing database data.
+- [x] Build and release the current backend as a separate, reversible deployment.
+- [x] Verify live readiness, authenticated session/assignment/enrollment reads,
+  and independent pool capacity using the deployed modules. A separate diagnostic
+  process held both device connections and the worker connection while ordinary
+  database, identity and assignment reads completed successfully.
+- [x] Preserve the shared Vaultwarden host and existing database data; verify the
+  fresh backup, unchanged database/Vaultwarden containers and restored assignment.
+- [ ] Complete concurrent physical Plaud pairing acceptance when testing resumes.
+  The release probe made no vendor requests and is not a load or hardware test.
 
 The earlier mobile/Amplify deployment did not update this API image. A separate
 pool mitigates starvation; durable vendor-operation reconciliation remains item 11.
@@ -377,6 +385,8 @@ visible without being mistaken for features already working in the hosted pilot.
 ## Closed implementation findings — do not redo
 
 - Reviewed, committed and pushed source baseline and ignore rules.
+- Separate database pools for ordinary requests, device operations and the worker,
+  now deployed to the live API (remaining physical verification in item 1).
 - Recoverable local deletion and confirmed-idle gating before recorder transfers.
 - Stable transcription controller identity during rename, selected recording
   retained through reload, and partial library reads (remaining acceptance in item 20).
@@ -389,7 +399,7 @@ visible without being mistaken for features already working in the hosted pilot.
 - Honest Keep offline in app wording, device photos, animated meters, improved
   media controls, draggable timeline, recording titles/notes and keyboard dictation.
 
-Recommended sequence: release item 1; fix returning-use items 2–4; deliver
+Recommended sequence: fix returning-use items 2–4; deliver
 export/Home/dashboard improvements 5–7; establish shared UI/accessibility 8–9;
 then take reliability/architecture/performance items 10–17 in separate slices.
 Build CI/release discipline alongside those slices. Keep the deferred acceptance
