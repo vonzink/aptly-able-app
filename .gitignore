@@ -1,0 +1,61 @@
+# Dependencies, generated output and local tooling.
+node_modules/
+**/dist/
+**/.expo/
+**/expo-env.d.ts
+**/coverage/
+.gradle/
+.cxx/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Expo-generated native projects; keep our native Plaud bridge source.
+**/ios/
+**/android/
+!apps/mobile/modules/plaud-sdk/ios/
+!apps/mobile/modules/plaud-sdk/android/
+# Native SDKs are restored from the documented provenance, not committed with app source.
+apps/mobile/modules/plaud-sdk/ios/Frameworks/
+apps/mobile/modules/plaud-sdk/android/libs/*.aar
+
+# Credentials, machine configuration and signing material.
+.env
+.env.*
+!.env.example
+*.local.xcconfig
+local.properties
+*.keystore
+*.jks
+*.p12
+*.p8
+*.key
+*.pem
+*.mobileprovision
+*.provisionprofile
+
+# Packaged applications and local release artifacts.
+*.apk
+*.aab
+*.ipa
+*.xcarchive/
+*.dSYM/
+*.dSYM.zip
+.local/
+
+# Original design exports and duplicate handoff archives, not app source.
+/Aptly Able mobile app design.zip
+/aptly-able-app-handoff.zip
+/aptly-able-app-handoff/
+/aptly-able-plaud-dashboard.zip
+/aptly-able-plaud-dashboard/
+/design_handoff_aptly_able_mobile/
+/plaude intergration
+
+# Logs and operating-system metadata.
+*.log
+.DS_Store
+
+# Browser verification artifacts can contain development invitations.
+.playwright-cli/
+output/playwright/
