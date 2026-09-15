@@ -2,7 +2,7 @@
 
 The user elected to reuse an existing small EC2 instance. **Do not create the
 Lightsail instance in the alternative `AWS_PILOT.md` guide.** The website stays on
-Amplify at `https://plaud.aptlyable.info`, while the backend will use
+Amplify at `https://plaud.aptlyable.info`, while the backend uses
 `https://api.plaud.aptlyable.info`.
 
 ## Before changing the server
@@ -32,7 +32,7 @@ deployment intentionally requires this to be explicit. Preserve the current
 proxy's client-IP sanitization behavior and avoid wildcard proxy trust. Check for
 conflicts with the prepared `172.30.45.0/24` network before using it.
 
-After inspection and adapting the existing proxy, the deployment sequence is:
+For initial provisioning, before an API container is running, the sequence is:
 
 ```sh
 cd /opt/aptly-able-pilot/current/deploy/pilot
@@ -41,6 +41,13 @@ sudo docker compose --env-file .env -f compose.yaml -f compose.shared-host.yaml 
 sudo docker compose --env-file .env -f compose.yaml -f compose.shared-host.yaml run --rm api node apps/api/dist/bootstrap/migrate.js
 sudo docker compose --env-file .env -f compose.yaml -f compose.shared-host.yaml up -d api
 ```
+
+For updates, stage an immutable release and take a fresh database backup first.
+Do not use `compose run api` alongside the running API: both request the same
+static IP. The verified update procedure and migration workaround are recorded
+in [the 0.1.2 deployment](verification/2026-09-15-version-0.1.2-deployment.md).
+Activate only the API with `up -d --no-deps --no-build --pull never --wait api`;
+keep the existing database and Vaultwarden running.
 
 Configure HTTPS for `api.plaud.aptlyable.info` using the existing proxy's certificate
 workflow. Validate its configuration before reloading. Verify Vaultwarden remains
@@ -58,28 +65,28 @@ Use the inspected host details below for this deployment.
 - Preserve existing mail, root-domain and Vaultwarden DNS records. A wildcard
   Porkbun parking record can coexist with a new exact `plaud` record.
 
-## Current deployment — September 14, 2026
+## Current deployment — September 15, 2026
 
 - AWS account `816069168722` (Vantedges Technologies), region `us-east-2`.
 - Instance `i-066c05c21f8aa2665`, `aptlyable-vaultwarden-prod-01`, Ubuntu 24.04,
   `t3.small`; Elastic IP `3.142.86.151`.
 - SSH user `ubuntu`, local key
   `/Users/zacharyzink/AptlyAble/Security/aptlyable-vaultwarden-admin.pem`.
-- Release `/opt/aptly-able-pilot/releases/20260914T225356Z-pool-9ec1539`;
-  `current` points here after the 23:40 UTC backend update.
+- Release `/opt/aptly-able-pilot/releases/20260915T222716Z-0.1.2-build7-f8b5f12`;
+  `current` points here after the 22:29 UTC backend update.
   Private environment is `current/deploy/pilot/.env` (mode 600).
-- Image `aptly-able-pilot-api:20260914-pool-9ec1539`, built on the Mac for
-  Linux/amd64 from source `9ec1539` and loaded on EC2. The image archive and
-  source archive are retained in the release directory. No builds ran on EC2.
-  The old release `2026-09-14-1805` and image `2026-09-14-amd64` remain for rollback.
-- The API uses separate pools of 2 ordinary, 2 device and 1 worker connections.
-  Only the API container was replaced. No migration, database restart, DNS or
-  Caddy change was needed. A user-approved temporary SSH rule was removed after
-  deployment, restoring the original four inbound rules.
-  See [deployment verification and rollback](verification/2026-09-14-backend-pool-isolation.md).
+- Image `aptly-able-pilot-api:0.1.2-build7`, built on the Mac for Linux/amd64 from
+  source `f8b5f12`. The previous release and images remain available; recovery
+  requires checking account-deletion compatibility before any rollback.
+- The API uses bounded pools: 2 ordinary, 2 device, 1 transcription worker,
+  2 upload and 1 deletion connection. Only the API container was replaced.
+  Additive account-deletion migrations 005 and 006 ran after a fresh backup.
+  Caddy, database/Vaultwarden containers, mounts and private API configuration
+  were preserved. The approved temporary SSH rule was removed, restoring four
+  inbound rules. See [deployment verification and recovery](verification/2026-09-15-version-0.1.2-deployment.md).
 - Postgres and API use only `aptly-able-pilot_pilot`, subnet `172.30.45.0/24`.
   Host traffic reaches the API from `172.30.45.1`; this exact IP is trusted.
-  Database migrations 001–004 were applied to the new pilot database.
+  Database migrations 001–006 are applied and their checksums were verified.
 - Persistent volumes: `aptly-able-pilot_postgres-data` and
   `aptly-able-pilot_recordings-data`. Do not run `docker compose down -v`.
 - Existing system Caddy routes `api.plaud.aptlyable.info` to `127.0.0.1:4180`.
@@ -87,8 +94,8 @@ Use the inspected host details below for this deployment.
   `/etc/caddy/Caddyfile.before-aptly-pilot-2026-09-14` before validation/reload.
 - Vaultwarden remains on `127.0.0.1:8000`, using `/opt/vaultwarden/data` and its
   original container/network. Its container start time remained August 13.
-  HTTPS returned 200 before and after the additive Caddy reload.
-- Sample idle usage after deployment: API 65 MiB, Postgres 22 MiB. This is a
+  HTTPS returned 200 after this API update; Caddy was unchanged.
+- Historical September 14 sample idle usage: API 65 MiB, Postgres 22 MiB. This is a
   small pilot capacity observation, not a load-test result.
 
 Useful commands after connecting with SSH:

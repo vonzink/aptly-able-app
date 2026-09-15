@@ -25,10 +25,11 @@ initial provisioning for a future move.
 2. In AWS Amplify, select **Create new app → Deploy without Git**.
 3. Set the app name to **aptly-able-pilot**, branch **pilot**, method **Drag and drop**.
 4. Upload `aptly-able-amplify.zip` and select **Save and deploy**.
-5. In **Hosting → Rewrites and redirects**, add the four rules from
+5. In **Hosting → Rewrites and redirects**, add the eight rules from
    `deploy/amplify/rewrites.json`. They are **200 rewrites**: `/enroll`,
-   `/enroll/`, `/dashboard` and `/dashboard/` go to `/index.html`. This lets a QR
-   open the installation page directly and supports direct links to the demo.
+   `/enroll/`, `/dashboard`, `/dashboard/`, `/privacy`, `/privacy/`, `/support` and
+   `/support/` go to `/index.html`. This supports direct installation, demo and
+   public privacy/support links.
    Do not add a blanket rewrite that turns missing APK requests into HTML.
 6. In **Hosting → Custom domains**, add `aptlyable.info`. Configure only the
    **plaud** subdomain to point to branch **pilot**. Remove the automatically
@@ -82,15 +83,15 @@ This is a configuration migration; the app and dashboard stay one codebase.
 
 ## Status
 
-September 14, 2026 (Mountain time): Amplify deployment job 5 succeeded. It adds
-the display-only Field Sense demo at `/dashboard`, accessible from the Dashboard
-link beside Sign out. The Android download remains version 0.1.0, build 4.
-The HTTPS website, demo and enrollment routes, public assets and complete Android
-download were verified live, including matching file SHA-256 hashes. API readiness
-and pilot account configuration were rechecked with the website's allowed origin.
-No backend, database, DNS or native app change was made for this release.
-See `verification/fieldsense-demo-deployment.md` for deployment and rollback details,
-and `verification/REMOTE_PILOT.md` for remaining physical-device acceptance work.
+September 15, 2026: Amplify deployment job **7** succeeded. The Android download
+is **0.1.2 (7)**. The complete website preserves the dashboard demo, enrollment
+flow and existing assets, and adds direct public privacy/support routes. All 23
+public files and nine entry routes passed live hash/header verification.
+The compatible EC2 backend was deployed first, including account-deletion
+migrations 005 and 006; its health and existing service preservation were checked.
+See [the deployment record](verification/2026-09-15-version-0.1.2-deployment.md)
+for exact artifacts, backup and recovery cautions. Physical-device acceptance
+remains outstanding; these checks do not establish App Store readiness.
 
 Porkbun records created for this deployment (existing root/mail/Vaultwarden
 records preserved):

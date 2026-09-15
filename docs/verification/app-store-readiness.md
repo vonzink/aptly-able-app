@@ -1,6 +1,14 @@
 # App Store readiness implementation — September 15, 2026
 
-Local implementation on `codex/app-store-readiness`. Existing uncommitted reliability work was preserved. No commits, push, deployment, production deletion, Apple upload or submission occurred. Source build number is now **0.1.0 (6)**; installed apps and published downloads have not been updated.
+At the initial implementation checkpoint on `codex/app-store-readiness`, existing reliability work was preserved and source was **0.1.0 (6)**. That checkpoint did not include deployment, production deletion, Apple upload or submission. The pilot deployment status is updated below.
+
+**Deployment update (September 15):** this implementation is now on `main` and
+was deployed in pilot **0.1.2 (7)**. API migrations 005/006 are applied, public
+privacy/support pages are live, the Android download is updated, and the iPhone
+build was installed locally. See [deployment evidence](2026-09-15-version-0.1.2-deployment.md).
+The opening paragraph and implementation-pass tables below describe the earlier
+local state. Vendor/privacy approval, staffed deletion follow-through, physical
+acceptance and App Store distribution/validation remain outstanding.
 
 ## Delivered and remaining
 
