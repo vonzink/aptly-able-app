@@ -27,9 +27,12 @@ internal class PlaudExportLifecycle(
   )
 
   fun complete(output: Any?, discard: () -> Unit = {}) {
-    if (lease.finish { if (!isPending) discard() }) {
+    if (lease.finish {
+      // Deliver or discard while ownership is still held. Teardown may cancel the outer
+      // tracked promise even after this operation's own settlement has started.
+      if (!call.tryResolve(output)) discard()
+    }) {
       onTerminal()
-      call.resolve(output)
     }
   }
 

@@ -85,4 +85,31 @@ class PlaudExportLifecycleTest {
     assertTrue(promise.resolutions.isEmpty())
     next.finish()
   }
+
+  @Test fun teardownBetweenInnerSettlementAndOuterDeliveryDiscardsUnderLease() {
+    val gate = PlaudExportGate()
+    val pendingCalls = PlaudPendingCalls { it(); true }
+    val promise = RecordingPromise()
+    var discarded = 0
+    var terminal = 0
+    val export = PlaudExportLifecycle(
+      pendingCalls.track(promise),
+      gate.acquire()!!,
+      // Deterministically destroy after the inner CAS wins, before outer delivery.
+      { pendingCalls.destroy() },
+      { terminal++ }
+    )
+    assertTrue(export.isPending)
+    export.complete("racing-file") {
+      assertTrue(gate.isBusy())
+      discarded++
+    }
+    assertEquals(listOf("ERR_PLAUD_CANCELLED"), promise.rejections)
+    assertTrue(promise.resolutions.isEmpty())
+    assertEquals(1, discarded)
+    assertEquals(1, terminal)
+    assertFalse(gate.isBusy())
+    export.complete("duplicate") { discarded++ }
+    assertEquals(1, discarded)
+  }
 }
