@@ -11,6 +11,7 @@ export const plaudNative: PlaudNativePort = {
   stopScan: () => PlaudSdk.stopScan(),
   connectBleDevice: (options) => PlaudSdk.connectBleDevice(options),
   disconnect: () => PlaudSdk.disconnect(),
+  isConnected: async () => (await PlaudSdk.isConnected()).connected,
   unpair: () => PlaudSdk.depair({ clear: Platform.OS !== 'android' }),
   addListener: (name, listener) =>
     PlaudSdk.addListener(name, listener as PlaudSdkEvents[typeof name]),

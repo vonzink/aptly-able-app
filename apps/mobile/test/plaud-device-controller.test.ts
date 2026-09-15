@@ -49,10 +49,17 @@ const controllers: PlaudDeviceController[] = [];
 function harness(
   overrides: Partial<PlaudDeviceClient> = {},
   nativeOverrides: Partial<PlaudNativePort> = {},
+  onUnpaired = vi.fn<(identity: { actorId: string; operationId: string }) => Promise<void>>(
+    async () => undefined,
+  ),
 ) {
   const callbacks = new Map<keyof PlaudNativeEvents, Set<(event: unknown) => void>>();
-  const emit = <K extends keyof PlaudNativeEvents>(name: K, event: PlaudNativeEvents[K]) =>
+  let nativeConnected = false;
+  const emit = <K extends keyof PlaudNativeEvents>(name: K, event: PlaudNativeEvents[K]) => {
+    if (name === 'connectState')
+      nativeConnected = (event as PlaudNativeEvents['connectState']).connected;
     callbacks.get(name)?.forEach((listener) => listener(event));
+  };
   const native: PlaudNativePort = {
     isAvailable: true,
     initSDK: vi.fn(async () => undefined),
@@ -60,6 +67,7 @@ function harness(
     stopScan: vi.fn(async () => undefined),
     connectBleDevice: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => emit('connectState', disconnected)),
+    isConnected: vi.fn(async () => nativeConnected),
     unpair: vi.fn(async () => undefined),
     addListener: vi.fn(
       <K extends keyof PlaudNativeEvents>(
@@ -84,16 +92,18 @@ function harness(
     session: vi.fn(async () => session),
     bind: vi.fn(async () => ({ status: 'bound' }) as const),
     unbind: vi.fn(async () => ({ status: 'unbound' }) as const),
+    completeUnpair: vi.fn(async () => ({ status: 'released' }) as const),
     ...overrides,
   };
   const controller = createPlaudDeviceController({
     client,
     native,
+    onUnpaired,
     timeouts: { requestMs: 1000, scanMs: 1000, handshakeMs: 1000, cleanupMs: 10 },
   });
   controllers.push(controller);
   controller.setEnrollment({ actorId, operationId, status: 'pending' });
-  return { native, client, controller, emit, callbacks };
+  return { native, client, controller, emit, callbacks, onUnpaired };
 }
 
 type Harness = ReturnType<typeof harness>;
@@ -432,13 +442,25 @@ describe('native Plaud recorder controller', () => {
     expect(test.controller.getSnapshot().message).toContain('do not uninstall');
   });
 
-  it('starts a fresh pairing after both unpair steps were confirmed', async () => {
+  it('removes the recorder and requires a new enrollment after confirmed unpair', async () => {
     const test = harness();
     await ready(test);
     const release = test.controller.unpair();
     await flush();
     test.emit('depair', { status: 0 });
     await release;
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'unpaired',
+      assignment: null,
+      nearby: null,
+      release: null,
+      pairingAttempted: false,
+      cloudBound: false,
+    });
+    expect(test.onUnpaired).toHaveBeenCalledWith({ actorId, operationId });
+    await test.controller.scan();
+    expect(test.native.initSDK).toHaveBeenCalledTimes(1);
+    test.controller.setEnrollment({ actorId, operationId: 'new-operation', status: 'pending' });
     await ready(test);
     expect(test.controller.getSnapshot().release).toBeNull();
     expect(test.client.bind).toHaveBeenCalledTimes(2);
@@ -518,7 +540,8 @@ describe('native Plaud recorder controller', () => {
     await unpairing;
     expect(test.controller.getSnapshot()).toMatchObject({
       phase: 'unpaired',
-      release: { cloud: true, device: true },
+      release: null,
+      assignment: null,
     });
   });
 
@@ -587,5 +610,73 @@ describe('native Plaud recorder controller', () => {
       release: null,
       assignment: null,
     });
+  });
+  it('does not release the assignment or forget enrollment when disconnect is not confirmed', async () => {
+    const test = harness({}, { disconnect: vi.fn(async () => undefined) });
+    await ready(test);
+    const unpairing = test.controller.unpair();
+    await flush();
+    test.emit('depair', { status: 0 });
+    await vi.advanceTimersByTimeAsync(31);
+    await unpairing;
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'error',
+      release: { cloud: true, device: true, assignment: false },
+    });
+    expect(test.client.completeUnpair).not.toHaveBeenCalled();
+    expect(test.onUnpaired).not.toHaveBeenCalled();
+    test.emit('connectState', disconnected);
+    await test.controller.unpair();
+    expect(test.native.unpair).toHaveBeenCalledTimes(1);
+    expect(test.client.completeUnpair).toHaveBeenCalledTimes(1);
+    expect(test.onUnpaired).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries failed dashboard release without pairing or unpairing the device again', async () => {
+    const completeUnpair = vi
+      .fn<PlaudDeviceClient['completeUnpair']>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ status: 'released' });
+    const test = harness({ completeUnpair });
+    await ready(test);
+    const unpairing = test.controller.unpair();
+    await flush();
+    expect(completeUnpair).not.toHaveBeenCalled();
+    test.emit('depair', { status: 0 });
+    await unpairing;
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'error',
+      release: { cloud: true, device: true, assignment: false },
+    });
+    expect(test.onUnpaired).not.toHaveBeenCalled();
+    await test.controller.scan();
+    expect(test.native.initSDK).toHaveBeenCalledTimes(1);
+    await test.controller.unpair();
+    expect(test.native.unpair).toHaveBeenCalledTimes(1);
+    expect(test.client.bind).toHaveBeenCalledTimes(1);
+    expect(completeUnpair).toHaveBeenCalledTimes(2);
+    expect(test.controller.getSnapshot().assignment).toBeNull();
+  });
+
+  it('keeps completed release evidence when local removal fails and retries only the remaining work', async () => {
+    const complete = vi
+      .fn<(identity: { actorId: string; operationId: string }) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('secure storage unavailable'))
+      .mockResolvedValue(undefined);
+    const test = harness({}, {}, complete);
+    await ready(test);
+    const unpairing = test.controller.unpair();
+    await flush();
+    test.emit('depair', { status: 0 });
+    await unpairing;
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'error',
+      release: { cloud: true, device: true, assignment: true },
+    });
+    await test.controller.unpair();
+    expect(test.native.unpair).toHaveBeenCalledTimes(1);
+    expect(test.client.completeUnpair).toHaveBeenCalledTimes(1);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(test.controller.getSnapshot().assignment).toBeNull();
   });
 });

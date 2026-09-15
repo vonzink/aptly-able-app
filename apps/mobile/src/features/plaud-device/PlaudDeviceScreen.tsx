@@ -57,9 +57,15 @@ export default function PlaudDeviceScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={[styles.eyebrow, { color: colors.orangeInk }]}>YOUR ASSIGNED RECORDER</Text>
+        <Text style={[styles.eyebrow, { color: colors.orangeInk }]}>
+          {enrollment.operation ? 'YOUR ASSIGNED RECORDER' : 'YOUR RECORDER'}
+        </Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.ink }]}>
-          {snapshot.phase === 'ready' ? 'Your Plaud recorder' : 'Connect your Plaud'}
+          {snapshot.phase === 'ready'
+            ? 'Your Plaud recorder'
+            : enrollment.operation
+              ? 'Connect your Plaud'
+              : 'Set up a recorder'}
         </Text>
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
           {snapshot.phase === 'ready'
@@ -90,10 +96,10 @@ export default function PlaudDeviceScreen() {
         />
       ) : !enrollment.operation ? (
         <Card style={styles.card}>
-          <Text style={[styles.cardTitle, { color: colors.ink }]}>Open your enrollment link</Text>
+          <Text style={[styles.cardTitle, { color: colors.ink }]}>No recorder connected</Text>
           <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-            Claim the recorder assigned to you before searching nearby. Your saved enrollment is
-            restored when you sign in on this phone.
+            Open an enrollment invitation to add a recorder. After unpairing, create a new
+            assignment and invitation in the dashboard to set it up again.
           </Text>
           {enrollment.message ? (
             <Text style={[styles.copy, { color: colors.inkSecondary }]}>{enrollment.message}</Text>
@@ -186,7 +192,7 @@ export default function PlaudDeviceScreen() {
                 onPress={() => void controller.disconnect()}
               />
             </>
-          ) : activeOperation && (!snapshot.release?.device || snapshot.phase === 'unpaired') ? (
+          ) : activeOperation && !snapshot.release?.device && snapshot.phase !== 'unpaired' ? (
             <>
               <Text style={[styles.copy, { color: colors.inkSecondary }]}>
                 Keep your recorder powered on and nearby. Allow Bluetooth access when your phone
@@ -194,13 +200,11 @@ export default function PlaudDeviceScreen() {
               </Text>
               <Button
                 label={
-                  snapshot.phase === 'unpaired'
-                    ? 'Pair recorder again'
-                    : recoveringRelease
-                      ? 'Reconnect to finish unpairing'
-                      : snapshot.phase === 'idle' && !snapshot.assignment
-                        ? 'Search for my recorder'
-                        : 'Search and reconnect'
+                  recoveringRelease
+                    ? 'Reconnect to finish unpairing'
+                    : snapshot.phase === 'idle' && !snapshot.assignment
+                      ? 'Search for my recorder'
+                      : 'Search and reconnect'
                 }
                 onPress={() => void controller.scan()}
               />

@@ -103,8 +103,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const lifecycle = useMemo(() => createReplaySafeLifecycle(controller), [controller]);
   // One SDK session is shared across tabs. Screen subscriptions never own its teardown.
   const plaudController = useMemo(
-    () => createPlaudDeviceController({ client: clients.plaudDevice, native: plaudNative }),
-    [clients],
+    () =>
+      createPlaudDeviceController({
+        client: clients.plaudDevice,
+        native: plaudNative,
+        onUnpaired: enrollmentController.clearAfterUnpair,
+      }),
+    [clients, enrollmentController],
   );
   const plaudLifecycle = useMemo(
     () => createReplaySafeLifecycle(plaudController),

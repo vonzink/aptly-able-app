@@ -25,6 +25,7 @@ export interface PlaudNativePort {
   stopScan(): Promise<void>;
   connectBleDevice(options: { uuid: string; deviceToken: string }): Promise<void>;
   disconnect(): Promise<void>;
+  isConnected(): Promise<boolean>;
   /** Normal unpair: Android clear=false; iOS clear=true. Result arrives via depair. */
   unpair(): Promise<void>;
   addListener<K extends keyof PlaudNativeEvents>(

@@ -206,4 +206,66 @@ describe('Plaud device owned enrollment persistence', () => {
     ]);
     expect(after.rowCount).toBe(audit.rowCount);
   });
+  test('completes unpair for the assigned user and revokes all setup links without deleting history', async () => {
+    const { service, provider, operation, assignment, enrollments } = await fixture();
+    await service.unbind(user, operation.id);
+    expect(
+      (await pool.query('SELECT status FROM recorder_assignments WHERE id = $1', [assignment.id]))
+        .rows[0].status,
+    ).toBe('active');
+    expect((await enrollments.getOperation(user, operation.id)).status).toBe('pending');
+    expect(await service.completeUnpair(user, operation.id)).toEqual({ status: 'released' });
+    expect(
+      (
+        await pool.query('SELECT status, ended_at FROM recorder_assignments WHERE id = $1', [
+          assignment.id,
+        ])
+      ).rows[0],
+    ).toMatchObject({ status: 'released', ended_at: expect.any(Date) });
+    expect((await enrollments.getOperation(user, operation.id)).status).toBe('revoked');
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int AS remaining FROM enrollment_tokens WHERE assignment_id = $1 AND revoked_at IS NULL',
+          [assignment.id],
+        )
+      ).rows[0].remaining,
+    ).toBe(0);
+    await expect(service.session(user, operation.id)).rejects.toMatchObject({
+      code: 'PLAUD_ENROLLMENT_INACTIVE',
+    });
+    expect(provider.unbind).toHaveBeenCalledTimes(2);
+  });
+
+  test('retries completion safely after reassignment without unbinding the new owner', async () => {
+    const { service, provider, operation, enrollments, recorder } = await fixture();
+    await service.completeUnpair(user, operation.id);
+    const next = await enrollments.createAssignment(admin, { userId: other.userId, ...recorder });
+    expect(await service.completeUnpair(user, operation.id)).toEqual({ status: 'released' });
+    expect(provider.unbind).toHaveBeenCalledTimes(1);
+    expect(
+      (await pool.query('SELECT status FROM recorder_assignments WHERE id = $1', [next.id])).rows[0]
+        .status,
+    ).toBe('active');
+    await expect(service.completeUnpair(other, operation.id)).rejects.toMatchObject({
+      code: 'PLAUD_OPERATION_NOT_FOUND',
+    });
+    await expect(service.completeUnpair(admin, operation.id)).rejects.toMatchObject({
+      code: 'PLAUD_OPERATION_NOT_FOUND',
+    });
+  });
+
+  test('keeps enrollment usable when final cloud release fails', async () => {
+    const { service, provider, operation, assignment, enrollments } = await fixture();
+    provider.unbind.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(service.completeUnpair(user, operation.id)).rejects.toMatchObject({
+      code: 'PLAUD_PROVIDER_UNAVAILABLE',
+    });
+    expect((await enrollments.getOperation(user, operation.id)).status).toBe('pending');
+    expect(
+      (await pool.query('SELECT status FROM recorder_assignments WHERE id = $1', [assignment.id]))
+        .rows[0].status,
+    ).toBe('active');
+    expect(await service.completeUnpair(user, operation.id)).toEqual({ status: 'released' });
+  });
 });

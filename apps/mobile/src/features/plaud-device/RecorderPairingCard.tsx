@@ -20,13 +20,16 @@ export function RecorderPairingCard() {
   const activeOperation = enrollment.operation?.status === 'pending';
   const recovering = snapshot.release !== null;
   const blocked = sync.busy || sync.activity === 'recording' || sync.activity === 'paused';
-  const label = !activeOperation
-    ? 'Request cloud release'
-    : recovering
-      ? snapshot.release?.device
-        ? 'Retry cloud release'
-        : 'Retry unfinished unpair steps'
-      : 'Unpair recorder';
+  const label =
+    snapshot.release?.cloud && snapshot.release.device
+      ? 'Finish removing recorder'
+      : !activeOperation
+        ? 'Request cloud release'
+        : recovering
+          ? snapshot.release?.device
+            ? 'Retry cloud release'
+            : 'Retry unfinished unpair steps'
+          : 'Unpair recorder';
   useFocusEffect(useCallback(() => () => setConfirmUnpair(false), []));
 
   function unpair() {
@@ -66,6 +69,7 @@ export function RecorderPairingCard() {
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
           Cloud release: {snapshot.release.cloud ? 'confirmed' : 'not confirmed'}
           {'\n'}Recorder release: {snapshot.release.device ? 'confirmed' : 'not confirmed'}
+          {'\n'}Dashboard release: {snapshot.release.assignment ? 'confirmed' : 'not confirmed'}
         </Text>
       ) : null}
       {snapshot.phase !== 'unpaired' &&
@@ -85,7 +89,7 @@ export function RecorderPairingCard() {
       <ConfirmationDialog
         visible={confirmUnpair}
         title={recovering || !activeOperation ? 'Continue unpairing?' : 'Unpair this recorder?'}
-        description={`This releases ${snapshot.assignment ? `recorder ending ${snapshot.assignment.serial.slice(-4)}` : 'your assigned recorder'} from your account. You will need to pair it again before receiving new recordings.`}
+        description={`This disconnects ${snapshot.assignment ? `recorder ending ${snapshot.assignment.serial.slice(-4)}` : 'your assigned recorder'}, releases its dashboard assignment, and removes its saved setup from this phone. Connecting again will require a new assignment and enrollment invitation.`}
         confirmLabel={label}
         cancelLabel="Keep current pairing"
         disabled={blocked}
@@ -93,8 +97,8 @@ export function RecorderPairingCard() {
         onCancel={() => setConfirmUnpair(false)}
       >
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-          Keep your recorder nearby and connected, and leave the app open until both cloud and
-          recorder release are confirmed. Recordings already saved in the app stay here.
+          Keep your recorder nearby and leave the app open until unpairing and dashboard release
+          finish. Recordings already saved in the app stay here.
         </Text>
         {blocked ? (
           <Text

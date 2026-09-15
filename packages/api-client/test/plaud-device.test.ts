@@ -45,9 +45,12 @@ describe('Plaud device API client', () => {
     expect(await client.bind(operationId)).toEqual({ status: 'bound' });
     transport.mockResolvedValueOnce(Response.json({ status: 'unbound' }));
     expect(await client.unbind(operationId)).toEqual({ status: 'unbound' });
+    transport.mockResolvedValueOnce(Response.json({ status: 'released' }));
+    expect(await client.completeUnpair(operationId)).toEqual({ status: 'released' });
     expect(transport.mock.calls.slice(2).map(([url]) => url)).toEqual([
       'https://api.example.test/v1/plaud/device-bind',
       'https://api.example.test/v1/plaud/device-unbind',
+      'https://api.example.test/v1/plaud/device-complete-unpair',
     ]);
   });
   it('validates credentials, cancellation and operation IDs before networking', async () => {

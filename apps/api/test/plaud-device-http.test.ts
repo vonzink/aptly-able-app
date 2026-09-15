@@ -19,6 +19,7 @@ function fixture(configured = true, storage = true, healthy = true) {
     session: vi.fn(async () => session),
     bind: vi.fn(async () => ({ status: 'bound' as const })),
     unbind: vi.fn(async () => ({ status: 'unbound' as const })),
+    completeUnpair: vi.fn(async () => ({ status: 'released' as const })),
   } satisfies PlaudDeviceService;
   const config = readConfig({
     DEV_SESSION_TOKEN: 'u'.repeat(48),
@@ -60,11 +61,16 @@ describe('Plaud device HTTP boundaries', () => {
     expect(response.json()).toEqual({ available: false, reason: 'storage_unavailable' });
     expect(response.body).not.toContain('private-database-error');
   });
-  it.each(['session', 'bind', 'unbind'] as const)(
+  it.each([
+    ['session', 'session'],
+    ['bind', 'bind'],
+    ['unbind', 'unbind'],
+    ['completeUnpair', 'complete-unpair'],
+  ] as const)(
     'authenticates and validates the %s request before calling the service',
-    async (method) => {
+    async (method, path) => {
       const { app, service } = fixture();
-      const url = `/v1/plaud/device-${method}`;
+      const url = `/v1/plaud/device-${path}`;
       expect((await app.inject({ method: 'POST', url, payload: { operationId } })).statusCode).toBe(
         401,
       );
@@ -96,7 +102,9 @@ describe('Plaud device HTTP boundaries', () => {
       expect(response.statusCode).toBe(200);
       expect(service[method]).toHaveBeenCalledWith({ userId, role: 'user' }, operationId);
       expect(response.json()).toEqual(
-        method === 'session' ? session : { status: method === 'bind' ? 'bound' : 'unbound' },
+        method === 'session'
+          ? session
+          : { status: method === 'bind' ? 'bound' : method === 'unbind' ? 'unbound' : 'released' },
       );
       expect(response.headers['cache-control']).toBe('no-store');
     },

@@ -11,6 +11,7 @@ export const plaudNative: PlaudNativePort = {
   stopScan: unavailable,
   connectBleDevice: unavailable,
   disconnect: unavailable,
+  isConnected: unavailable,
   unpair: unavailable,
   addListener: () => ({ remove() {} }),
 };

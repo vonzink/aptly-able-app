@@ -6,6 +6,7 @@ import {
   plaudDeviceOperationRequestSchema,
   plaudDeviceBindSchema,
   plaudDeviceUnbindSchema,
+  plaudDeviceReleaseSchema,
 } from '@aptly/contracts';
 import type { SessionVerifier } from '../../modules/identity/development-identity.js';
 import type { PlaudDeviceService } from '../../modules/plaud-devices/service.js';
@@ -75,5 +76,9 @@ export function registerPlaudDeviceRoutes(
   app.post('/v1/plaud/device-unbind', async (request) => {
     const { actor, operationId, service } = await authorize(request);
     return plaudDeviceUnbindSchema.parse(await service.unbind(actor, operationId));
+  });
+  app.post('/v1/plaud/device-complete-unpair', async (request) => {
+    const { actor, operationId, service } = await authorize(request);
+    return plaudDeviceReleaseSchema.parse(await service.completeUnpair(actor, operationId));
   });
 }

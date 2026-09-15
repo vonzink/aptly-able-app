@@ -29,3 +29,5 @@ export const plaudDeviceBindSchema = z.strictObject({ status: z.literal('bound')
 export const plaudDeviceUnbindSchema = z.strictObject({ status: z.literal('unbound') });
 export type PlaudDeviceBind = z.infer<typeof plaudDeviceBindSchema>;
 export type PlaudDeviceUnbind = z.infer<typeof plaudDeviceUnbindSchema>;
+export const plaudDeviceReleaseSchema = z.strictObject({ status: z.literal('released') });
+export type PlaudDeviceRelease = z.infer<typeof plaudDeviceReleaseSchema>;

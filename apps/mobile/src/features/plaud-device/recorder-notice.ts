@@ -29,12 +29,12 @@ export function getRecorderNotice(
   }
   if (snapshot.phase === 'needs-enrollment') {
     return neutral(
-      'Open your enrollment invitation to set up your assigned recorder.',
+      'No recorder is connected. Open an enrollment invitation to set one up.',
       'Set up recorder',
     );
   }
   if (snapshot.phase === 'unpaired') {
-    return neutral('Your recorder is unpaired.', 'Pair recorder');
+    return neutral('Your recorder is unpaired and removed.', 'Set up recorder');
   }
   if (snapshot.release !== null && snapshot.phase !== 'unpairing') {
     return neutral(

@@ -466,4 +466,78 @@ describe('enrollment controller', () => {
     expect(controller.getSnapshot().phase).toBe('needs-invitation');
     expect(controller.getSnapshot().actorId).toBe(actorA);
   });
+  it('removes durable enrollment after unpair without signing out, and does not restore it on restart', async () => {
+    const store = journal({ actorId: actorA, key, operationId });
+    const { controller, credential } = setup(fakeClient(), store);
+    await controller.signIn('local-user-code');
+    await controller.clearAfterUnpair({ actorId: actorA, operationId });
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: 'needs-invitation',
+      actorId: actorA,
+      operation: null,
+      preview: null,
+    });
+    expect(credential()).toBe('local-user-code');
+    expect(store.value).toBeNull();
+    const restarted = setup(
+      fakeClient({
+        getOperation: async () => {
+          throw new Error('Must not restore old pairing');
+        },
+      }),
+      store,
+    );
+    await restarted.controller.signIn('local-user-code');
+    expect(restarted.controller.getSnapshot()).toMatchObject({
+      phase: 'needs-invitation',
+      operation: null,
+    });
+  });
+
+  it('does not remove another account or operation after a stale unpair callback', async () => {
+    const store = journal({ actorId: actorA, key, operationId });
+    const { controller } = setup(fakeClient(), store);
+    await controller.signIn('local-user-code');
+    await controller.clearAfterUnpair({ actorId: actorB, operationId });
+    await controller.clearAfterUnpair({ actorId: actorA, operationId: key });
+    expect(controller.getSnapshot().operation?.id).toBe(operationId);
+    expect(store.value?.operationId).toBe(operationId);
+  });
+
+  it('retains the operation for retry if durable unpair cleanup fails', async () => {
+    const store = journal({ actorId: actorA, key, operationId });
+    const { controller } = setup(fakeClient(), store);
+    await controller.signIn('local-user-code');
+    store.clear = async () => {
+      throw new Error('Storage unavailable');
+    };
+    await expect(controller.clearAfterUnpair({ actorId: actorA, operationId })).rejects.toThrow(
+      'Storage unavailable',
+    );
+    expect(controller.getSnapshot().operation?.id).toBe(operationId);
+    store.clear = async () => {
+      store.value = null;
+    };
+    await controller.clearAfterUnpair({ actorId: actorA, operationId });
+    expect(controller.getSnapshot().operation).toBeNull();
+    expect(store.value).toBeNull();
+  });
+
+  it('does not let a late status response restore an enrollment removed by unpair', async () => {
+    const response = deferred<SetupOperation>();
+    let refreshing = false;
+    const { controller } = setup(
+      fakeClient({
+        getOperation: () => (refreshing ? response.promise : Promise.resolve(operation)),
+      }),
+      journal({ actorId: actorA, key, operationId }),
+    );
+    await controller.signIn('local-user-code');
+    refreshing = true;
+    const refresh = controller.refresh();
+    await controller.clearAfterUnpair({ actorId: actorA, operationId });
+    response.resolve(operation);
+    await refresh;
+    expect(controller.getSnapshot().operation).toBeNull();
+  });
 });

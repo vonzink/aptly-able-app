@@ -42,6 +42,7 @@ export interface EnrollmentController {
   initialize(): Promise<void>;
   receiveInvitation(token: string): void;
   startNewInvitation(): Promise<void>;
+  clearAfterUnpair(expected: { actorId: string; operationId: string }): Promise<void>;
   signIn(accessCode: string): Promise<void>;
   retryRecovery(): Promise<void>;
   resolveInvitation(): Promise<void>;
@@ -160,6 +161,28 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
           message: 'Secure enrollment recovery is unavailable on this device.',
         });
     }
+  }
+
+  async function clearAfterUnpair(expected: { actorId: string; operationId: string }) {
+    if (snapshot.actorId !== expected.actorId || snapshot.operation?.id !== expected.operationId)
+      return;
+    const requestGeneration = ++generation;
+    lifecycleEpoch += 1;
+    cancelRequest();
+    invitation = null;
+    savedJournal = null;
+    claimPromise = null;
+    // Preserve the operation until durable removal succeeds, so the caller can retry.
+    // Journal writes are serialized behind any earlier recovery/claim save.
+    await writeJournal(() => deps.journal.clear());
+    if (!active(requestGeneration)) return;
+    update({
+      phase: 'needs-invitation',
+      preview: null,
+      operation: null,
+      message:
+        'Recorder unpaired. Its dashboard assignment and saved phone enrollment have been removed. Create a new assignment and enrollment invitation to connect a recorder.',
+    });
   }
 
   async function recoverJournal(
@@ -375,6 +398,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     initialize,
     receiveInvitation,
     startNewInvitation,
+    clearAfterUnpair,
     signIn,
     retryRecovery,
     resolveInvitation,

@@ -7,6 +7,7 @@ import {
   type PlaudDeviceSession,
   type PlaudDeviceBind,
   type PlaudDeviceUnbind,
+  type PlaudDeviceRelease,
 } from '@aptly/contracts';
 import type { ActorContext } from '../identity/development-identity.js';
 import type { PlaudDeviceProvider } from './provider.js';
@@ -16,6 +17,7 @@ export interface PlaudDeviceService {
   session(actor: ActorContext, operationId: string): Promise<PlaudDeviceSession>;
   bind(actor: ActorContext, operationId: string): Promise<PlaudDeviceBind>;
   unbind(actor: ActorContext, operationId: string): Promise<PlaudDeviceUnbind>;
+  completeUnpair(actor: ActorContext, operationId: string): Promise<PlaudDeviceRelease>;
 }
 type Recorder = PlaudDeviceSession['recorder'];
 const missing = () =>
@@ -38,8 +40,12 @@ export function createPlaudDeviceService(
   async function owned<T>(
     actor: ActorContext,
     operationId: string,
-    releasing: boolean,
-    work: (recorder: Recorder, client: pg.PoolClient) => Promise<T>,
+    mode: 'connect' | 'unbind' | 'complete-unpair',
+    work: (
+      recorder: Recorder,
+      client: pg.PoolClient,
+      assignment: { id: string; status: string },
+    ) => Promise<T>,
   ): Promise<T> {
     if (
       !z.uuid().safeParse(actor.userId).success ||
@@ -51,8 +57,8 @@ export function createPlaudDeviceService(
       await client.query('BEGIN');
       await client.query("SET LOCAL lock_timeout = '5s'");
       const reference = (
-        await client.query<{ recorder_id: string }>(
-          `SELECT a.recorder_id FROM setup_operations o
+        await client.query<{ recorder_id: string; assignment_id: string }>(
+          `SELECT a.recorder_id, a.id AS assignment_id FROM setup_operations o
          JOIN recorder_assignments a ON a.id = o.assignment_id AND a.user_id = o.user_id
          WHERE o.id = $1 AND o.user_id = $2`,
           [operationId, actor.userId],
@@ -78,11 +84,14 @@ export function createPlaudDeviceService(
       ).rows[0];
       if (!device || !state) throw missing();
       if (
-        !releasing &&
+        mode === 'connect' &&
         (state.operation_status !== 'pending' || state.assignment_status !== 'active')
       )
         throw inactive();
-      if (releasing) {
+      if (
+        mode === 'unbind' ||
+        (mode === 'complete-unpair' && state.assignment_status === 'active')
+      ) {
         const assignedElsewhere = await client.query(
           "SELECT 1 FROM recorder_assignments WHERE recorder_id = $1 AND status = 'active' AND user_id <> $2",
           [reference.recorder_id, actor.userId],
@@ -95,7 +104,10 @@ export function createPlaudDeviceService(
           );
       }
       const recorder = plaudDeviceSessionSchema.shape.recorder.parse(device);
-      const result = await work(recorder, client);
+      const result = await work(recorder, client, {
+        id: reference.assignment_id,
+        status: state.assignment_status,
+      });
       await client.query('COMMIT');
       return result;
     } catch (error) {
@@ -130,21 +142,47 @@ export function createPlaudDeviceService(
   }
   return {
     session: (actor, operationId) =>
-      owned(actor, operationId, false, async (recorder) => {
+      owned(actor, operationId, 'connect', async (recorder) => {
         const token = await vendor(() => provider.session(actor.userId));
         return plaudDeviceSessionSchema.parse({ ...token, userId: actor.userId, recorder });
       }),
     bind: (actor, operationId) =>
-      owned(actor, operationId, false, async (recorder, client) => {
+      owned(actor, operationId, 'connect', async (recorder, client) => {
         await vendor(() => provider.bind(actor.userId, recorder));
         await audit(client, actor, operationId, 'plaud.device_bound');
         return { status: 'bound' as const };
       }),
     unbind: (actor, operationId) =>
-      owned(actor, operationId, true, async (recorder, client) => {
+      owned(actor, operationId, 'unbind', async (recorder, client) => {
         await vendor(() => provider.unbind(actor.userId, recorder));
         await audit(client, actor, operationId, 'plaud.device_unbound');
         return { status: 'unbound' as const };
+      }),
+    completeUnpair: (actor, operationId) =>
+      owned(actor, operationId, 'complete-unpair', async (recorder, client, assignment) => {
+        // A response-loss retry must never unbind a recorder that has since been reassigned.
+        if (assignment.status !== 'active') return { status: 'released' as const };
+        // The app calls this only after BLE depair and disconnect have been confirmed.
+        // Reconfirm cloud release under the ownership lock before ending enrollment.
+        await vendor(() => provider.unbind(actor.userId, recorder));
+        await client.query(
+          `UPDATE enrollment_tokens SET revoked_at = clock_timestamp()
+           WHERE assignment_id = $1 AND revoked_at IS NULL`,
+          [assignment.id],
+        );
+        await client.query(
+          `UPDATE setup_operations SET status = 'revoked', revoked_at = clock_timestamp()
+           WHERE assignment_id = $1 AND status = 'pending'`,
+          [assignment.id],
+        );
+        await client.query(
+          `UPDATE recorder_assignments SET status = 'released', ended_at = clock_timestamp()
+           WHERE id = $1`,
+          [assignment.id],
+        );
+        await audit(client, actor, assignment.id, 'assignment.ended');
+        await audit(client, actor, operationId, 'plaud.device_unpair_completed');
+        return { status: 'released' as const };
       }),
   };
 }

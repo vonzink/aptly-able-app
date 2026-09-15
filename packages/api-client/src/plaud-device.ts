@@ -5,10 +5,12 @@ import {
   plaudDeviceOperationRequestSchema,
   plaudDeviceBindSchema,
   plaudDeviceUnbindSchema,
+  plaudDeviceReleaseSchema,
   type PlaudDeviceCapabilities,
   type PlaudDeviceSession,
   type PlaudDeviceBind,
   type PlaudDeviceUnbind,
+  type PlaudDeviceRelease,
 } from '@aptly/contracts';
 import { ApiError } from './api-error.js';
 import { apiBase } from './api-base.js';
@@ -19,6 +21,7 @@ export interface PlaudDeviceClient {
   session(operationId: string, options?: RequestOptions): Promise<PlaudDeviceSession>;
   bind(operationId: string, options?: RequestOptions): Promise<PlaudDeviceBind>;
   unbind(operationId: string, options?: RequestOptions): Promise<PlaudDeviceUnbind>;
+  completeUnpair(operationId: string, options?: RequestOptions): Promise<PlaudDeviceRelease>;
 }
 const messages: Record<string, string> = {
   UNAUTHORIZED: 'Your access code was not accepted. Sign in again.',
@@ -173,5 +176,7 @@ export function createPlaudDeviceClient({
       request('/v1/plaud/device-bind', plaudDeviceBindSchema, operationId, options),
     unbind: (operationId, options) =>
       request('/v1/plaud/device-unbind', plaudDeviceUnbindSchema, operationId, options),
+    completeUnpair: (operationId, options) =>
+      request('/v1/plaud/device-complete-unpair', plaudDeviceReleaseSchema, operationId, options),
   };
 }

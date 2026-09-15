@@ -2,6 +2,7 @@ import { ApiError, type PlaudDeviceClient } from '@aptly/api-client';
 import type { PlaudDeviceSession } from '@aptly/contracts';
 
 import type { PlaudNativePort, PlaudNearbyDevice } from './plaud-native-port';
+import { disconnectPlaudTransport } from './disconnect-plaud-transport';
 
 export type PlaudDevicePhase =
   | 'unavailable'
@@ -34,7 +35,7 @@ export interface PlaudDeviceSnapshot {
   cloudBound: boolean;
   pairingAttempted: boolean;
   /** Keep each confirmed release separately so a partial unpair can be retried safely. */
-  release: { cloud: boolean; device: boolean } | null;
+  release: { cloud: boolean; device: boolean; assignment: boolean } | null;
 }
 
 export interface PlaudDeviceController {
@@ -84,10 +85,12 @@ const initial: PlaudDeviceSnapshot = {
 export function createPlaudDeviceController({
   client,
   native,
+  onUnpaired,
   timeouts = {},
 }: {
   client: PlaudDeviceClient;
   native: PlaudNativePort;
+  onUnpaired(enrollment: { actorId: string; operationId: string }): Promise<void>;
   timeouts?: { requestMs?: number; scanMs?: number; handshakeMs?: number; cleanupMs?: number };
 }): PlaudDeviceController {
   const requestMs = timeouts.requestMs ?? 20_000;
@@ -307,6 +310,7 @@ export function createPlaudDeviceController({
       native.isAvailable &&
       enrollment?.operationId &&
       enrollment.status === 'pending' &&
+      !snapshot.release?.device &&
       !job &&
       !disposed
     );
@@ -316,7 +320,6 @@ export function createPlaudDeviceController({
     if (!canScan()) return Promise.resolve();
     invalidate();
     return run(async (own) => {
-      if (snapshot.phase === 'unpaired') publish({ release: null, pairingAttempted: false });
       publish({ phase: 'preparing', nearby: null, message: null });
       await wait(
         cleanup,
@@ -452,8 +455,10 @@ export function createPlaudDeviceController({
     if (!native.isAvailable || disposed || job || !enrollment?.operationId)
       return Promise.resolve();
     const operationId = enrollment.operationId;
+    const actorId = enrollment.actorId;
     return run(async (own) => {
-      const previous = snapshot.release ?? { cloud: false, device: false };
+      const previous = snapshot.release ?? { cloud: false, device: false, assignment: false };
+      let transportClosed = false;
       publish({ phase: 'unpairing', message: null, release: { ...previous } });
       depaired = pending<void>();
       const releaseCloud = async () => {
@@ -466,8 +471,27 @@ export function createPlaudDeviceController({
         );
         publish({ cloudBound: false, release: { ...snapshot.release!, cloud: true } });
       };
+      const closeTransport = async () => {
+        if (!current(own)) return;
+        try {
+          await disconnectPlaudTransport(native, (promise) =>
+            wait(promise, own, cleanupMs, 'Bluetooth disconnect was not confirmed.'),
+          );
+          if (current(own)) {
+            transportClosed = true;
+            nativeStarted = false;
+            bleConnected = false;
+            connectionAttempt = false;
+          }
+        } catch {
+          // Keep confirmed release steps for a retry; never call dispatch alone a success.
+        }
+      };
       const releaseDevice = async () => {
-        if (previous.device) return;
+        if (previous.device) {
+          await closeTransport();
+          return;
+        }
         if (!connectionAttempt || !bleConnected)
           throw new DeviceFailure('Reconnect the recorder to finish device unpairing.');
         try {
@@ -480,16 +504,7 @@ export function createPlaudDeviceController({
           publish({ release: { ...snapshot.release!, device: true } });
         } finally {
           // Android requires a disconnect after depair, including timeout/failure.
-          // Cancellation also queues native cleanup, so stale jobs cannot change the UI.
-          if (current(own)) {
-            await wait(native.disconnect(), own, cleanupMs, 'Bluetooth cleanup timed out.').catch(
-              () => undefined,
-            );
-            if (current(own)) {
-              bleConnected = false;
-              connectionAttempt = false;
-            }
-          }
+          await closeTransport();
         }
       };
       // Try both sides even if one fails. Confirmations, including a device callback that
@@ -499,12 +514,47 @@ export function createPlaudDeviceController({
       depaired = null;
       clearEvents();
       if (snapshot.release?.cloud && snapshot.release.device) {
-        queueCleanup();
+        if (!transportClosed)
+          throw new DeviceFailure(
+            'Pairing is released, but Bluetooth disconnection is not confirmed. Retry to finish removing the recorder.',
+          );
+        if (!snapshot.release.assignment) {
+          try {
+            await wait(
+              client.completeUnpair(operationId, { signal: own.abort.signal }),
+              own,
+              requestMs,
+              'Dashboard release was not confirmed.',
+            );
+          } catch (error) {
+            if (!current(own)) throw error;
+            throw new DeviceFailure(
+              'The recorder is disconnected, but its dashboard assignment could not be released. Retry to finish unpairing.',
+            );
+          }
+          publish({ release: { ...snapshot.release!, assignment: true } });
+        }
+        try {
+          await wait(
+            onUnpaired({ actorId, operationId }),
+            own,
+            requestMs,
+            'Recorder removal could not be saved. Retry to finish removing it from this phone.',
+          );
+        } catch (error) {
+          if (!current(own)) throw error;
+          throw new DeviceFailure(
+            'The recorder is disconnected, but its saved enrollment could not be removed. Retry to finish removing it from this phone.',
+          );
+        }
+        if (!current(own)) return;
+        // The app's enrollment subscription normally clears this controller synchronously.
+        // Also prevent this controller from reusing the old enrollment on its own.
+        enrollment = { actorId, operationId: null, status: null };
         publish({
+          ...initial,
           phase: 'unpaired',
-          nearby: null,
-          cloudBound: false,
-          message: 'Cloud and recorder unpairing confirmed.',
+          message: 'Recorder unpaired and removed from this phone.',
         });
       } else {
         const cloud = snapshot.release?.cloud;
