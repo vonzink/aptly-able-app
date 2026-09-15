@@ -2,5 +2,9 @@
   { "source": "/enroll", "target": "/index.html", "status": "200" },
   { "source": "/enroll/", "target": "/index.html", "status": "200" },
   { "source": "/dashboard", "target": "/index.html", "status": "200" },
-  { "source": "/dashboard/", "target": "/index.html", "status": "200" }
+  { "source": "/dashboard/", "target": "/index.html", "status": "200" },
+  { "source": "/privacy", "target": "/index.html", "status": "200" },
+  { "source": "/privacy/", "target": "/index.html", "status": "200" },
+  { "source": "/support", "target": "/index.html", "status": "200" },
+  { "source": "/support/", "target": "/index.html", "status": "200" }
 ]

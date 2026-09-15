@@ -11,6 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(root, '.local/remote-pilot');
 const origin = 'https://plaud.aptlyable.info';
 const apiOrigin = 'https://api.plaud.aptlyable.info';
+const release = JSON.parse(await readFile(resolve(root, 'apps/mobile/release.json'), 'utf8'));
 await mkdir(output, { recursive: true, mode: 0o700 });
 const stage = await mkdtemp(resolve(output, 'server-package-'));
 try {
@@ -21,10 +22,12 @@ try {
   if (
     metadata.apiUrl !== apiOrigin ||
     metadata.package !== 'com.aptlyable.mobile' ||
+    metadata.version !== release.version ||
+    metadata.versionCode !== release.buildNumber ||
     !metadata.standalone
   )
     throw new Error(
-      'The Android build must be standalone and target the configured pilot website.',
+      'The Android build must match release.json, be standalone and target the configured pilot website.',
     );
   const bytes = await readFile(apk);
   if (metadata.sha256 !== createHash('sha256').update(bytes).digest('hex'))
@@ -33,6 +36,7 @@ try {
     'package.json',
     'pnpm-lock.yaml',
     'pnpm-workspace.yaml',
+    'patches',
     'tsconfig.base.json',
     '.dockerignore',
     'packages/contracts',

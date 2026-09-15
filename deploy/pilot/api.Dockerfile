@@ -2,6 +2,7 @@ FROM node:24.13.0-bookworm-slim AS build
 RUN npm install --global pnpm@11.19.0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY patches ./patches
 COPY packages/contracts ./packages/contracts
 COPY apps/api ./apps/api
 COPY scripts/copy-api-migrations.mjs ./scripts/copy-api-migrations.mjs
