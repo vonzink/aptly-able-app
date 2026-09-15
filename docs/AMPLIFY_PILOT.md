@@ -82,14 +82,15 @@ This is a configuration migration; the app and dashboard stay one codebase.
 
 ## Status
 
-September 14, 2026: Amplify deployment job 3 succeeded and publishes Android
-version 0.1.0, build 3. The HTTPS website, both installation routes and complete
-Android download were checked live, including the APK SHA-256. API readiness and
-pilot account configuration were rechecked with the website's allowed origin.
-Account creation/login, assignment and QR browser acceptance belong to the
-initial deployment; those checks were not rerun for this update. No backend or
-DNS changes were made for job 3. See `verification/REMOTE_PILOT.md` for remaining
-physical-device acceptance work and the deployment evidence location.
+September 14, 2026 (Mountain time): Amplify deployment job 5 succeeded. It adds
+the display-only Field Sense demo at `/dashboard`, accessible from the Dashboard
+link beside Sign out. The Android download remains version 0.1.0, build 4.
+The HTTPS website, demo and enrollment routes, public assets and complete Android
+download were verified live, including matching file SHA-256 hashes. API readiness
+and pilot account configuration were rechecked with the website's allowed origin.
+No backend, database, DNS or native app change was made for this release.
+See `verification/fieldsense-demo-deployment.md` for deployment and rollback details,
+and `verification/REMOTE_PILOT.md` for remaining physical-device acceptance work.
 
 Porkbun records created for this deployment (existing root/mail/Vaultwarden
 records preserved):
