@@ -23,6 +23,8 @@ const device: PlaudDeviceSnapshot = {
   message: privateValue,
   cloudBound: true,
   pairingAttempted: true,
+  scanDisclosure: null,
+  permissionDenied: false,
   release: null,
 };
 const sync: PlaudSyncSnapshot = {

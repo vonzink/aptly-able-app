@@ -19,7 +19,7 @@ import * as Crypto from 'expo-crypto';
 import { useFonts } from 'expo-font';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createReplaySafeLifecycle } from './recorder-lifecycle';
@@ -125,6 +125,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       createPlaudDeviceController({
         client: clients.plaudDevice,
         native: plaudNative,
+        requireScanDisclosure: Platform.OS === 'android',
         onUnpaired: enrollmentController.clearAfterUnpair,
       }),
     [clients, enrollmentController],

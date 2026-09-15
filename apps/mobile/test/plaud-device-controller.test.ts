@@ -52,6 +52,7 @@ function harness(
   onUnpaired = vi.fn<(identity: { actorId: string; operationId: string }) => Promise<void>>(
     async () => undefined,
   ),
+  requireScanDisclosure = false,
 ) {
   const callbacks = new Map<keyof PlaudNativeEvents, Set<(event: unknown) => void>>();
   let nativeConnected = false;
@@ -99,6 +100,7 @@ function harness(
     client,
     native,
     onUnpaired,
+    requireScanDisclosure,
     timeouts: { requestMs: 1000, scanMs: 1000, handshakeMs: 1000, cleanupMs: 10 },
   });
   controllers.push(controller);
@@ -725,5 +727,116 @@ describe('native Plaud recorder controller', () => {
     expect(test.client.completeUnpair).toHaveBeenCalledTimes(1);
     expect(complete).toHaveBeenCalledTimes(2);
     expect(test.controller.getSnapshot().assignment).toBeNull();
+  });
+});
+
+async function requestAndroidScanDisclosure(test: Harness) {
+  void test.controller.scan();
+  await flush();
+  const request = test.controller.getSnapshot().scanDisclosure;
+  expect(typeof request).toBe('number');
+  return request!;
+}
+
+describe('Android recorder scan disclosure', () => {
+  it('keeps service calls and SDK permission requests behind affirmative consent', async () => {
+    const test = harness({}, {}, undefined, true);
+    const request = await requestAndroidScanDisclosure(test);
+    expect(test.controller.getSnapshot().phase).toBe('idle');
+    expect(test.client.session).not.toHaveBeenCalled();
+    expect(test.native.initSDK).not.toHaveBeenCalled();
+    expect(test.native.startScan).not.toHaveBeenCalled();
+
+    const scanning = test.controller.confirmScanDisclosure(request);
+    await flush();
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'scanning',
+      scanDisclosure: null,
+    });
+    test.emit('scanResult', { devices: [device] });
+    await scanning;
+    expect(test.controller.getSnapshot().phase).toBe('found');
+    await test.controller.confirmScanDisclosure(request);
+    expect(test.native.startScan).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets users decline and return later without touching the SDK or service', async () => {
+    const test = harness({}, {}, undefined, true);
+    const request = await requestAndroidScanDisclosure(test);
+    test.controller.declineScanDisclosure(request);
+    await test.controller.confirmScanDisclosure(request);
+    expect(test.controller.getSnapshot()).toMatchObject({ phase: 'idle', scanDisclosure: null });
+    expect(test.client.capabilities).not.toHaveBeenCalled();
+    expect(test.native.initSDK).not.toHaveBeenCalled();
+    expect(test.native.startScan).not.toHaveBeenCalled();
+    expect(await requestAndroidScanDisclosure(test)).not.toBe(request);
+  });
+
+  it.each(['actor', 'enrollment', 'sign-out', 'revoked', 'cancel', 'dispose'])(
+    'rejects stale consent after %s changes',
+    async (change) => {
+      const test = harness({}, {}, undefined, true);
+      const request = await requestAndroidScanDisclosure(test);
+      if (change === 'actor')
+        test.controller.setEnrollment({ actorId: 'another-actor', operationId, status: 'pending' });
+      if (change === 'enrollment')
+        test.controller.setEnrollment({
+          actorId,
+          operationId: 'another-enrollment',
+          status: 'pending',
+        });
+      if (change === 'sign-out') test.controller.setEnrollment(null);
+      if (change === 'revoked')
+        test.controller.setEnrollment({ actorId, operationId, status: 'revoked' });
+      if (change === 'cancel') test.controller.cancel();
+      if (change === 'dispose') test.controller.dispose();
+      await test.controller.confirmScanDisclosure(request);
+      expect(test.controller.getSnapshot().scanDisclosure).toBeNull();
+      expect(test.client.session).not.toHaveBeenCalled();
+      expect(test.native.initSDK).not.toHaveBeenCalled();
+      expect(test.native.startScan).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not apply an old confirmation to a newer disclosure', async () => {
+    const test = harness({}, {}, undefined, true);
+    const oldRequest = await requestAndroidScanDisclosure(test);
+    test.controller.declineScanDisclosure(oldRequest);
+    const request = await requestAndroidScanDisclosure(test);
+    await test.controller.confirmScanDisclosure(oldRequest);
+    test.controller.declineScanDisclosure(oldRequest);
+    expect(test.controller.getSnapshot().scanDisclosure).toBe(request);
+    expect(test.native.initSDK).not.toHaveBeenCalled();
+  });
+
+  it('explains precise location after denial and gates a retry before requesting again', async () => {
+    const test = harness(
+      {},
+      {
+        startScan: vi
+          .fn()
+          .mockRejectedValueOnce({ code: 'ERR_PLAUD_PERMISSIONS' })
+          .mockResolvedValue(undefined),
+      },
+      undefined,
+      true,
+    );
+    const request = await requestAndroidScanDisclosure(test);
+    await test.controller.confirmScanDisclosure(request);
+    expect(test.controller.getSnapshot()).toMatchObject({ phase: 'error', permissionDenied: true });
+    expect(test.controller.getSnapshot().message).toContain('Precise location');
+    expect(test.controller.getSnapshot().message).toContain('Nearby devices');
+
+    const retry = await requestAndroidScanDisclosure(test);
+    expect(test.native.startScan).toHaveBeenCalledTimes(1);
+    const scanning = test.controller.confirmScanDisclosure(retry);
+    await flush();
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'scanning',
+      permissionDenied: false,
+    });
+    test.emit('scanResult', { devices: [device] });
+    await scanning;
+    expect(test.controller.getSnapshot().phase).toBe('found');
   });
 });

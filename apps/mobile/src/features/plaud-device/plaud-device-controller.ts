@@ -32,6 +32,8 @@ export interface PlaudDeviceSnapshot {
   assignment: PlaudDeviceSession['recorder'] | null;
   nearby: PlaudNearbyDevice | null;
   message: string | null;
+  scanDisclosure: number | null;
+  permissionDenied: boolean;
   cloudBound: boolean;
   pairingAttempted: boolean;
   /** Keep each confirmed release separately so a partial unpair can be retried safely. */
@@ -43,6 +45,8 @@ export interface PlaudDeviceController {
   subscribe(listener: () => void): () => void;
   setEnrollment(enrollment: PlaudDeviceEnrollment | null): void;
   scan(): Promise<void>;
+  confirmScanDisclosure(request: number): Promise<void>;
+  declineScanDisclosure(request: number): void;
   connect(): Promise<void>;
   cancel(): void;
   disconnect(): Promise<void>;
@@ -77,6 +81,8 @@ const initial: PlaudDeviceSnapshot = {
   assignment: null,
   nearby: null,
   message: null,
+  scanDisclosure: null,
+  permissionDenied: false,
   cloudBound: false,
   pairingAttempted: false,
   release: null,
@@ -86,11 +92,13 @@ export function createPlaudDeviceController({
   client,
   native,
   onUnpaired,
+  requireScanDisclosure = false,
   timeouts = {},
 }: {
   client: PlaudDeviceClient;
   native: PlaudNativePort;
   onUnpaired(enrollment: { actorId: string; operationId: string }): Promise<void>;
+  requireScanDisclosure?: boolean;
   timeouts?: { requestMs?: number; scanMs?: number; handshakeMs?: number; cleanupMs?: number };
 }): PlaudDeviceController {
   const requestMs = timeouts.requestMs ?? 20_000;
@@ -103,6 +111,7 @@ export function createPlaudDeviceController({
   };
   let enrollment: PlaudDeviceEnrollment | null = null;
   let generation = 0;
+  let disclosureSequence = 0;
   let job: Job | null = null;
   let disposed = false;
   let nativeStarted = false;
@@ -206,11 +215,14 @@ export function createPlaudDeviceController({
         if (!current(own) || error instanceof Cancelled) return;
         publish({
           phase: 'error',
+          permissionDenied: permissionError(error),
           message:
             error instanceof DeviceFailure || error instanceof ApiError
               ? error.message
               : permissionError(error)
-                ? 'Allow Bluetooth and Nearby devices access in phone settings, then try again.'
+                ? requireScanDisclosure
+                  ? 'Allow Nearby devices / Bluetooth and Location with Precise location in phone settings, then search again. Approximate-only location cannot complete Plaud setup. You can keep using your local recordings without these permissions.'
+                  : 'Allow Bluetooth and Nearby devices access in phone settings, then try again.'
                 : 'Recorder setup could not finish. Check your connection and try again.',
         });
         invalidate();
@@ -314,9 +326,18 @@ export function createPlaudDeviceController({
 
   function scan() {
     if (!canScan()) return Promise.resolve();
+    if (requireScanDisclosure) {
+      if (snapshot.scanDisclosure === null) publish({ scanDisclosure: ++disclosureSequence });
+      return Promise.resolve();
+    }
+    return beginScan();
+  }
+
+  function beginScan() {
+    if (!canScan()) return Promise.resolve();
     invalidate();
     return run(async (own) => {
-      publish({ phase: 'preparing', nearby: null, message: null });
+      publish({ phase: 'preparing', nearby: null, message: null, permissionDenied: false });
       await wait(
         cleanup,
         own,
@@ -604,12 +625,23 @@ export function createPlaudDeviceController({
       });
     },
     scan,
+    confirmScanDisclosure(request) {
+      // Only the current dialog may authorize a scan. Enrollment changes reset this
+      // request, and every retry gets a new one before SDK permissions can be asked.
+      if (snapshot.scanDisclosure !== request || !canScan()) return Promise.resolve();
+      publish({ scanDisclosure: null });
+      return beginScan();
+    },
+    declineScanDisclosure(request) {
+      if (snapshot.scanDisclosure === request) publish({ scanDisclosure: null });
+    },
     connect,
     cancel() {
       const wasUnpairing = snapshot.phase === 'unpairing';
       invalidate();
       publish({
         phase: wasUnpairing ? 'error' : 'idle',
+        scanDisclosure: null,
         nearby: null,
         message: wasUnpairing
           ? 'Unpairing was interrupted. Some release steps may have completed; reconnect and retry to confirm.'

@@ -28,7 +28,7 @@ export default function PrivacyScreen() {
         </Card>
       ))}
       <Card>
-        <CompanyLinks />
+        <CompanyLinks accountDeletion />
       </Card>
     </Screen>
   );

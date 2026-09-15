@@ -1,4 +1,4 @@
-import { appDataNotice, company } from '@aptly/product-content';
+import { accountDeletionRequest, appDataNotice, company } from '@aptly/product-content';
 import './legal.css';
 
 export function LegalPage({ page }: { page: 'privacy' | 'support' }) {
@@ -39,13 +39,20 @@ export function LegalPage({ page }: { page: 'privacy' | 'support' }) {
             report from the phone app’s Settings. Please do not send passwords or private
             recordings.
           </p>
-          <p>
-            For account deletion, open Settings → Delete account in the phone app. If you cannot
-            sign in, email support to request help. Include your deletion reference if you already
-            submitted a request.
-          </p>
         </section>
       )}
+      <section id="delete-account" aria-labelledby="delete-account-heading">
+        <h2 id="delete-account-heading">{accountDeletionRequest.title}</h2>
+        {page === 'support' &&
+          accountDeletionRequest.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+        <p>
+          <a href={accountDeletionRequest.emailUrl}>Email an account deletion request</a>
+        </p>
+        <p>
+          You can also open Settings → Delete account in the phone app. If you already requested
+          deletion, include your reference when contacting support.
+        </p>
+      </section>
       <section>
         <h2>Contact {company.name}</h2>
         <p>

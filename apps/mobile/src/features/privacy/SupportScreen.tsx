@@ -1,3 +1,4 @@
+import { accountDeletionRequest } from '@aptly/product-content';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 import { Button, Card, PageHeader, Screen } from '../../ui/components';
@@ -20,14 +21,17 @@ export default function SupportScreen() {
           diagnostics report in Settings and include it in your message. Do not send your password
           or private recordings.
         </Text>
-        <CompanyLinks supportOnly />
+        <CompanyLinks supportOnly accountDeletion />
       </Card>
       <Card style={styles.card}>
-        <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-          To request account deletion, use Delete account in Settings. If you cannot sign in,
-          contact support for help with your request. Include your deletion reference if you have
-          one.
+        <Text accessibilityRole="header" style={[styles.title, { color: colors.ink }]}>
+          {accountDeletionRequest.title}
         </Text>
+        {accountDeletionRequest.paragraphs.map((paragraph) => (
+          <Text key={paragraph} style={[styles.copy, { color: colors.inkSecondary }]}>
+            {paragraph}
+          </Text>
+        ))}
         <Button
           label="Privacy & your recordings"
           variant="secondary"
@@ -44,5 +48,6 @@ export default function SupportScreen() {
 }
 const styles = StyleSheet.create({
   card: { gap: 14 },
+  title: { fontFamily: fontFamily.semibold, fontSize: 18, lineHeight: 25 },
   copy: { fontFamily: fontFamily.regular, fontSize: 14, lineHeight: 23 },
 });

@@ -10,6 +10,7 @@ interface ConfirmationDialogProps {
   title: string;
   description: string;
   confirmLabel: string;
+  confirmVariant?: 'primary' | 'danger';
   cancelLabel?: string;
   loading?: boolean;
   disabled?: boolean;
@@ -23,6 +24,7 @@ export function ConfirmationDialog({
   title,
   description,
   confirmLabel,
+  confirmVariant = 'danger',
   cancelLabel = 'Cancel',
   loading = false,
   disabled = false,
@@ -57,7 +59,7 @@ export function ConfirmationDialog({
             {children}
             <Button
               label={confirmLabel}
-              variant="danger"
+              variant={confirmVariant}
               loading={loading}
               disabled={disabled}
               onPress={() => {

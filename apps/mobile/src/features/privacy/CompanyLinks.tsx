@@ -1,10 +1,16 @@
-import { company } from '@aptly/product-content';
+import { accountDeletionRequest, company } from '@aptly/product-content';
 import { useState } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../ui/components';
 import { fontFamily, useTheme } from '../../ui/theme';
 
-export function CompanyLinks({ supportOnly = false }: { supportOnly?: boolean }) {
+export function CompanyLinks({
+  supportOnly = false,
+  accountDeletion = false,
+}: {
+  supportOnly?: boolean;
+  accountDeletion?: boolean;
+}) {
   const { colors } = useTheme();
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   async function open(url: string) {
@@ -26,6 +32,13 @@ export function CompanyLinks({ supportOnly = false }: { supportOnly?: boolean })
         variant="secondary"
         onPress={() => void open(`mailto:${company.supportEmail}`)}
       />
+      {accountDeletion ? (
+        <Button
+          label="Email an account deletion request"
+          variant="secondary"
+          onPress={() => void open(accountDeletionRequest.emailUrl)}
+        />
+      ) : null}
       <Button
         label="Open contact page"
         variant="text"

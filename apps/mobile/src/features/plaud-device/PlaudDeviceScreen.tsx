@@ -1,9 +1,12 @@
+import { androidRecorderDisclosure } from '@aptly/product-content';
+import { useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { useEnrollmentController, useEnrollmentSnapshot } from '../../bootstrap/AppProviders';
 import { Button, Card, Screen } from '../../ui/components';
+import { ConfirmationDialog } from '../../ui/ConfirmationDialog';
 import { fontFamily, useTheme } from '../../ui/theme';
 import { LocalAccessCard } from '../session/LocalAccessCard';
 import { RecorderIdentityCard } from '../recorder/RecorderIdentityCard';
@@ -52,6 +55,16 @@ export default function PlaudDeviceScreen() {
   const waiting = progress[snapshot.phase];
   const activeOperation = enrollment.operation?.status === 'pending';
   const recoveringRelease = snapshot.release !== null;
+  const [settingsFailed, setSettingsFailed] = useState(false);
+
+  async function openPermissions() {
+    setSettingsFailed(false);
+    try {
+      await Linking.openSettings();
+    } catch {
+      setSettingsFailed(true);
+    }
+  }
 
   return (
     <Screen>
@@ -162,6 +175,35 @@ export default function PlaudDeviceScreen() {
             </View>
           ) : null}
 
+          {Platform.OS === 'android' && snapshot.permissionDenied ? (
+            <Card style={styles.card}>
+              <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.ink }]}>
+                Update recorder permissions
+              </Text>
+              <Text style={[styles.copy, { color: colors.inkSecondary }]}>
+                In Aptly Able’s app permissions, allow Nearby devices / Bluetooth and Location, with
+                Precise location enabled. Return here and search again when ready. Your local
+                recordings remain available if you decline.
+              </Text>
+              <Button
+                label="Open phone settings"
+                variant="secondary"
+                onPress={() => void openPermissions()}
+              />
+              <Button
+                label="Use local recordings"
+                variant="text"
+                onPress={() => router.push('/recordings')}
+              />
+              {settingsFailed ? (
+                <Text accessibilityRole="alert" style={[styles.copy, { color: colors.danger }]}>
+                  Phone settings could not open. Open Settings → Apps → Aptly Able → Permissions on
+                  your phone to update access.
+                </Text>
+              ) : null}
+            </Card>
+          ) : null}
+
           {waiting ? (
             <Card style={styles.card}>
               <ActivityIndicator color={colors.accent} />
@@ -194,8 +236,9 @@ export default function PlaudDeviceScreen() {
           ) : activeOperation && !snapshot.release?.device && snapshot.phase !== 'unpaired' ? (
             <>
               <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-                Keep your recorder powered on and nearby. Allow Bluetooth access when your phone
-                asks. Only your assigned recorder will appear.
+                {Platform.OS === 'android'
+                  ? 'Keep your recorder powered on and nearby. Before searching, review the Bluetooth and location access needed by the Plaud SDK. Only your assigned recorder will appear.'
+                  : 'Keep your recorder powered on and nearby. Allow Bluetooth access when your phone asks. Only your assigned recorder will appear.'}
               </Text>
               <Button
                 label={
@@ -230,6 +273,23 @@ export default function PlaudDeviceScreen() {
           ) : null}
         </>
       )}
+      <ConfirmationDialog
+        visible={snapshot.scanDisclosure !== null}
+        title={androidRecorderDisclosure.title}
+        description={androidRecorderDisclosure.description}
+        confirmLabel="Agree and continue"
+        confirmVariant="primary"
+        cancelLabel="Use local recordings"
+        onConfirm={() => {
+          if (snapshot.scanDisclosure !== null)
+            void controller.confirmScanDisclosure(snapshot.scanDisclosure);
+        }}
+        onCancel={() => {
+          if (snapshot.scanDisclosure !== null)
+            controller.declineScanDisclosure(snapshot.scanDisclosure);
+          router.push('/recordings');
+        }}
+      />
     </Screen>
   );
 }
