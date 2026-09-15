@@ -5,6 +5,7 @@ import { Button, Card, PageHeader, Screen, SectionLabel } from '../../ui/compone
 import { fontFamily, useTheme } from '../../ui/theme';
 import { RecordingStorageCard } from '../recordings/components/RecordingStorageCard';
 import { SettingsDiagnostics } from './SettingsDiagnostics';
+import { SettingsFirmwareCard } from './SettingsFirmwareCard';
 import { isStoreRelease } from '../../services/release-profile';
 
 export default function SettingsScreen() {
@@ -32,6 +33,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/enroll')}
         />
       </Card>
+      <SettingsFirmwareCard />
       <SectionLabel>PRIVACY & HELP</SectionLabel>
       <Card style={local.enrollment}>
         <Button

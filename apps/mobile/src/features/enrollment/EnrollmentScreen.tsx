@@ -21,6 +21,7 @@ export default function EnrollmentScreen() {
   const { colors } = useTheme();
   const [manual, setManual] = useState('');
   const [inputMessage, setInputMessage] = useState<string | null>(null);
+  const needsSignIn = state.phase === 'signed-out' || state.phase === 'signing-in';
 
   useEffect(() => {
     let mounted = true;
@@ -68,28 +69,31 @@ export default function EnrollmentScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={[styles.eyebrow, { color: colors.orangeInk }]}>RECORDER ENROLLMENT</Text>
+        <Text style={[styles.eyebrow, { color: colors.orangeInk }]}>
+          {needsSignIn ? 'APTLY ABLE' : 'RECORDER ENROLLMENT'}
+        </Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.ink }]}>
-          Set up your assigned recorder
+          {needsSignIn ? 'Welcome' : 'Set up your assigned recorder'}
         </Text>
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-          Open your invitation and sign in to accept your assigned recorder. Then connect it with
-          Bluetooth.
+          {needsSignIn
+            ? 'Sign in to access your recorder and recordings.'
+            : 'Accept your recorder invitation, then connect with Bluetooth.'}
         </Text>
       </View>
 
-      {state.phase === 'signed-out' || state.phase === 'signing-in' ? (
+      {needsSignIn ? (
         <>
+          <LocalAccessCard
+            loading={state.phase === 'signing-in'}
+            message={state.message}
+            onSubmit={(code, email, expiresAt) => void controller.signIn(code, email, expiresAt)}
+          />
           <InvitationEntry
             value={manual}
             message={inputMessage}
             onChange={setManual}
             onSubmit={acceptManual}
-          />
-          <LocalAccessCard
-            loading={state.phase === 'signing-in'}
-            message={state.message}
-            onSubmit={(code, email, expiresAt) => void controller.signIn(code, email, expiresAt)}
           />
         </>
       ) : null}

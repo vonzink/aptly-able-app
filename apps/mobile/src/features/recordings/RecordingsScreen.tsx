@@ -78,11 +78,38 @@ export default function RecordingsScreen() {
         renderItem={renderRecording}
         ItemSeparatorComponent={RowSeparator}
         contentContainerStyle={styles.list}
+        automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         ListHeaderComponent={
           <View style={styles.header}>
             <PageHeader title="Recordings" copy="Listen, read transcripts and manage your audio." />
+            <View
+              style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.line }]}
+            >
+              <Ionicons name="search-outline" color={colors.inkSecondary} size={19} />
+              <TextInput
+                accessibilityLabel="Search recordings"
+                accessibilityHint="Search titles, notes and transcripts."
+                placeholder="Search recordings"
+                placeholderTextColor={colors.inkMuted}
+                value={search}
+                onChangeText={setSearch}
+                style={[styles.searchInput, { color: colors.ink }]}
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {search ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear recording search"
+                  onPress={() => setSearch('')}
+                  style={({ pressed }) => [styles.clearSearch, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Ionicons name="close-circle" color={colors.inkSecondary} size={22} />
+                </Pressable>
+              ) : null}
+            </View>
             <RecorderSyncCard />
             <View style={styles.tools}>
               <View style={styles.importAction}>
@@ -154,34 +181,6 @@ export default function RecordingsScreen() {
             ) : null}
             {state.recordings.length > 0 ? (
               <>
-                <View
-                  style={[
-                    styles.search,
-                    { backgroundColor: colors.surface, borderColor: colors.line },
-                  ]}
-                >
-                  <Ionicons name="search-outline" color={colors.inkSecondary} size={19} />
-                  <TextInput
-                    accessibilityLabel="Search recordings"
-                    placeholder="Search titles, notes and transcripts"
-                    placeholderTextColor={colors.inkMuted}
-                    value={search}
-                    onChangeText={setSearch}
-                    style={[styles.searchInput, { color: colors.ink }]}
-                    autoCorrect={false}
-                    returnKeyType="search"
-                  />
-                  {search ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Clear recording search"
-                      onPress={() => setSearch('')}
-                      style={({ pressed }) => [styles.clearSearch, { opacity: pressed ? 0.6 : 1 }]}
-                    >
-                      <Ionicons name="close-circle" color={colors.inkSecondary} size={22} />
-                    </Pressable>
-                  ) : null}
-                </View>
                 <View style={styles.section}>
                   <Text
                     accessibilityRole="header"

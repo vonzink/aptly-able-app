@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,8 @@ export function Screen({ children }: { children: ReactNode }) {
       <ScrollView
         contentContainerStyle={styles.screen}
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
       >
         {children}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError } from '@aptly/api-client';
 import { useRouter } from 'expo-router';
 import { useAuthClient } from '../../bootstrap/AppProviders';
@@ -24,10 +24,16 @@ export function PilotAccessCard({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const emailInput = useRef<TextInput>(null);
+  const passwordInput = useRef<TextInput>(null);
   const request = useRef<AbortController | null>(null);
+  const canSubmit =
+    Boolean(email.trim() && password) &&
+    (mode === 'login' || Boolean(displayName.trim() && password.length >= 12));
   useEffect(() => () => request.current?.abort(), []);
   async function signIn() {
-    if (request.current || loading) return;
+    if (request.current || loading || !canSubmit) return;
+    Keyboard.dismiss();
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
@@ -56,12 +62,12 @@ export function PilotAccessCard({
   return (
     <Card style={styles.card}>
       <Text accessibilityRole="header" style={[styles.title, { color: colors.ink }]}>
-        {mode === 'register' ? 'Create your account' : 'Sign in to Aptly Able'}
+        {mode === 'register' ? 'Create your account' : 'Sign in'}
       </Text>
       <Text style={[styles.copy, { color: colors.inkSecondary }]}>
         {mode === 'register'
-          ? 'One account for your recorder, this app and the web dashboard. Your invitation stays here while you create your account.'
-          : 'Use your Aptly Able email and password. Your recorder invitation stays here while you sign in.'}
+          ? 'One account for your recorder, this app and the web dashboard.'
+          : 'Use the same email and password as the web dashboard.'}
       </Text>
       {mode === 'register' && (
         <View style={styles.field}>
@@ -72,6 +78,9 @@ export function PilotAccessCard({
             value={displayName}
             onChangeText={setDisplayName}
             maxLength={120}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => emailInput.current?.focus()}
             editable={!busy && !loading}
             style={inputStyle}
           />
@@ -80,11 +89,15 @@ export function PilotAccessCard({
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Email address</Text>
         <TextInput
+          ref={emailInput}
           accessibilityLabel="Email address"
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="email"
           keyboardType="email-address"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordInput.current?.focus()}
           maxLength={254}
           value={email}
           onChangeText={setEmail}
@@ -97,6 +110,7 @@ export function PilotAccessCard({
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.ink }]}>Password</Text>
         <TextInput
+          ref={passwordInput}
           accessibilityLabel="Password"
           autoCapitalize="none"
           autoCorrect={false}
@@ -106,6 +120,8 @@ export function PilotAccessCard({
           value={password}
           onChangeText={setPassword}
           onSubmitEditing={() => void signIn()}
+          returnKeyType={mode === 'register' ? 'done' : 'go'}
+          returnKeyLabel={mode === 'register' ? 'Create account' : 'Sign in'}
           placeholder="Password"
           placeholderTextColor={colors.inkMuted}
           editable={!busy && !loading}
@@ -126,11 +142,7 @@ export function PilotAccessCard({
       <Button
         label={mode === 'register' ? 'Create account' : 'Sign in'}
         loading={busy || loading}
-        disabled={
-          !email.trim() ||
-          !password ||
-          (mode === 'register' && (!displayName.trim() || password.length < 12))
-        }
+        disabled={!canSubmit}
         onPress={() => void signIn()}
       />
       <Button

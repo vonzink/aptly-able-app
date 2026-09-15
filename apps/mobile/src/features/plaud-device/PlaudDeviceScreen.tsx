@@ -10,7 +10,6 @@ import { RecorderIdentityCard } from '../recorder/RecorderIdentityCard';
 import { RecorderPairingCard } from './RecorderPairingCard';
 import { PlaudRecorderControls } from './PlaudRecorderControls';
 import { PlaudWifiTransferCard } from './PlaudWifiTransferCard';
-import { PlaudFirmwareCard } from './PlaudFirmwareCard';
 import { usePlaudSync } from './PlaudSyncProvider';
 import { PlaudDeviceStatus } from './PlaudDeviceStatus';
 import type { PlaudDevicePhase } from './plaud-device-controller';
@@ -229,7 +228,6 @@ export default function PlaudDeviceScreen() {
               key={`${enrollment.actorId}:${enrollment.operation.id}:${snapshot.assignment?.serial}`}
             />
           ) : null}
-          <PlaudFirmwareCard />
         </>
       )}
     </Screen>

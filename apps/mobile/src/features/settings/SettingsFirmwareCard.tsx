@@ -4,7 +4,7 @@ import { Card, SectionLabel } from '../../ui/components';
 import { fontFamily, useTheme } from '../../ui/theme';
 import { isStoreRelease } from '../../services/release-profile';
 
-export function PlaudFirmwareCard() {
+export function SettingsFirmwareCard() {
   return isStoreRelease ? null : <PilotFirmwareCard />;
 }
 
