@@ -55,7 +55,7 @@ test(
           e.includes('get-task-allow'),
         ),
       );
-      assert.ok(run({ unsigned: true }).errors.some((e) => e.includes('Hermes SDK')));
+      assert.ok(!run({ unsigned: true }).errors.some((e) => e.includes('Hermes SDK')));
       const mobile = join(dir, 'mobile');
       for (const [sdk] of suppliedBundles) {
         const p = join(mobile, 'node_modules', sdk, 'ios');
@@ -72,7 +72,7 @@ test(
           JSON.stringify({ NSPrivacyAccessedAPITypes: [] }),
         );
       assert.ok(!run({ unsigned: true }).errors.some((e) => e.includes('Missing supplied')));
-      assert.ok(run({ unsigned: true }).errors.some((e) => e.includes('Hermes SDK')));
+      assert.deepEqual(run({ unsigned: true }).errors, []);
       info.AptlyReleaseChannel = 'pilot';
       assert.ok(run({ unsigned: true }).errors.some((e) => e.includes('stale')));
     } finally {

@@ -71,14 +71,10 @@ export function inspectApp({
       errors.push(
         `Missing supplied ${bundle} privacy bundle; regenerate with withStoreReadiness and rebuild.`,
       );
-  if (
-    !manifests.some((p) =>
-      /\/(hermes[^/]*\.framework|hermes[^/]*\.bundle)\/PrivacyInfo\.xcprivacy$/i.test(p),
-    )
-  )
-    errors.push(
-      'Hermes SDK privacy manifest missing: obtain a version-matched official Hermes/React Native SDK package with its vendor manifest and provenance; do not substitute the app manifest or invented reason codes.',
-    );
+  // Meta's Hermes engine is not the Imgur/Hermes SDK on Apple's commonly-used
+  // SDK list. A missing standalone Hermes manifest is not, by itself, an error.
+  // Required-reason coverage, actual SDK provenance and Apple validation still apply.
+  // https://github.com/react-native-community/discussions-and-proposals/discussions/776
   if (!unsigned) {
     if (!signedEntitlements || signedEntitlements['get-task-allow'] !== false)
       errors.push(

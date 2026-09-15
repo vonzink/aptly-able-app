@@ -1,5 +1,7 @@
 # Apple App Store Compliance & Submission Readiness Audit
 
+> **Correction, September 15, 2026:** The original C3 conclusion that Meta’s Hermes engine is Apple’s listed Hermes SDK was incorrect and is withdrawn. React Native maintainers [clarified that the listed SDK is Imgur/Hermes](https://github.com/react-native-community/discussions-and-proposals/discussions/776#hermes). Missing a standalone Meta Hermes manifest is not by itself a rejection condition. The original findings below are retained as an audit snapshot; current remediation and verified native results belong in `docs/verification/app-store-readiness.md` and `docs/verification/ios-store-packaging.md`. Expo/Plaud privacy coverage and Apple validation remain applicable.
+
 Audit date: September 15, 2026. Repository: `/Users/zacharyzink/AptlyAble/aptly-able-app`.
 Baseline: `main`, `f968a4a0dd70fb1d88d3319e461f895173474f67`, **including the existing uncommitted cleanup**. This is an audit, not a release approval or legal opinion.
 

@@ -35,7 +35,7 @@
 **Files:** `apps/mobile/plugins/withStoreReadiness.cjs`, `scripts/ios-store.mjs`, `scripts/verify-ios-store.mjs`, dedicated native manifest resources/configuration, script tests.
 
 - [x] Inspect official Apple/SDK sources for correct manifests/reason declarations; never manufacture vendor attestation.
-- [x] Fix reproducible copying of supplied Expo privacy resource bundles and remove unused FaceID declaration. Obtain a legitimate Hermes manifest if supplied upstream; otherwise fail store verification with an actionable error.
+- [x] Fix reproducible copying of supplied Expo privacy resource bundles and remove unused FaceID declaration. Identify SDKs by provenance: React Native maintainers distinguish Meta Hermes from Apple-listed Imgur/Hermes. Do not require an unrelated vendor manifest by name alone; retain real required-reason and SDK privacy validation.
 - [x] Add dry-run/unsigned archive validation and explicit distribution export path, production origin/native mode checks, required legal metadata checks, get-task-allow rejection and manifest inspection.
 - [x] Keep pilot signing unchanged; document remaining SDK/signature/physical checks. Do not upload or regenerate shared native projects concurrently.
 
@@ -61,7 +61,8 @@
 
 - [x] Run workspace typecheck/lint/tests/build and relevant migration/lifecycle regressions; review complete change set against the audit.
 - [x] Back up and complete non-clean store-profile native generation and Pod installation; confirm EXApplication/ExpoClipboard registration.
-- [ ] Complete the native archive after the local Xcode stall is resolved. The bounded unsigned attempt stalled in ExpoModulesJSI; no new completed/signed archive is claimed.
+- [x] Complete and inspect a fresh unsigned native archive after the owner restarts the Mac. Xcode reported ARCHIVE SUCCEEDED and the packaged privacy/profile/permission checks passed.
+- [ ] Complete physical testing, distribution signing/export and Apple validation after the remaining owner/vendor evidence is supplied.
 - [x] Produce `docs/verification/app-store-readiness.md` mapping every critical/high audit item to implemented, owner input, vendor evidence or physical validation.
 - [x] Keep App Store policy draft, metadata checklist, hardware review notes and exact distribution commands ready for owner review; no claim of deployment/submission.
 
@@ -87,3 +88,5 @@
 - Supplied SDK reason declarations are aggregated into and verified against the main app privacy manifest without overwriting app collection/tracking fields.
 
 - Remediated two transitive npm advisories with scoped, compatible overrides; malformed-link, normal enrollment URL and Xcode ID regressions pass. No advisory ignores were added.
+
+- Post-restart native archive succeeded for build 6. Corrected the mistaken Meta Hermes/Imgur SDK-name privacy check using React Native maintainer guidance; all other SDK/privacy/evidence checks remain.
