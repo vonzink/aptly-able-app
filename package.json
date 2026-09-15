@@ -39,7 +39,9 @@
     "ios:store:verify": "node scripts/verify-ios-store.mjs",
     "test:ios-store": "node --test scripts/tests/ios-store.test.mjs",
     "test:release": "node --test scripts/tests/*.test.mjs",
-    "audit:dependencies": "pnpm audit --prod"
+    "audit:dependencies": "pnpm audit --prod",
+    "android:store": "node scripts/android-store.mjs",
+    "android:store:verify": "node scripts/verify-android-store.mjs"
   },
   "devDependencies": {
     "typescript": "6.0.3",

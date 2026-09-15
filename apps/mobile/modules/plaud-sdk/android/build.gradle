@@ -24,6 +24,16 @@ android {
 }
 
 dependencies {
+  testImplementation 'junit:junit:4.13.2'
+
+  // Expo's transitive 2.6 has known parsing/path advisories. A constraint fixes
+  // the application's resolved graph without modifying generated projects.
+  constraints {
+    implementation('commons-io:commons-io:2.22.0') {
+      because 'CVE-2024-47554 and CVE-2021-29425 affect the old transitive version'
+    }
+  }
+
   // The Plaud Android SDK itself. `api` (not `implementation`) so the app's classpath can
   // see the SDK types too — the same way the iOS podspec vendors the xcframeworks.
   api files('libs/plaud-sdk.aar')
@@ -46,10 +56,10 @@ dependencies {
   implementation 'org.java-websocket:Java-WebSocket:1.5.7'
 
   // sdk.ble.util.AudioDecryptor uses ChaCha20 (org.bouncycastle.crypto.engines).
-  implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+  implementation 'org.bouncycastle:bcprov-jdk18on:1.85.2'
 
   // Referenced by sdk.network.OkHttpCompat for the TLS provider.
-  implementation 'org.conscrypt:conscrypt-android:2.5.2'
+  implementation 'org.conscrypt:conscrypt-android:2.6.3'
 
   // Logging: the SDK logs through Timber *and* slf4j/logback (res/raw/logback.xml).
   implementation 'com.jakewharton.timber:timber:5.0.1'

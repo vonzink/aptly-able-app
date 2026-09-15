@@ -44,12 +44,13 @@ const config: ExpoConfig = {
     './plugins/withAppSchemes.cjs',
     './plugins/withPlaudIosTransfer.cjs',
     'expo-router',
-    ['expo-secure-store', { faceIDPermission: false }],
+    ['expo-secure-store', { faceIDPermission: false, configureAndroidBackup: false }],
     [
       'expo-audio',
       { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: false },
     ],
     './plugins/withStoreReadiness.cjs',
+    './plugins/withAndroidReadiness.cjs',
   ],
   experiments: { typedRoutes: true },
   extra: { recorderMode: androidPreview ? 'mock' : 'native', releaseChannel },
@@ -81,6 +82,15 @@ const config: ExpoConfig = {
   android: {
     package: androidPreview ? 'com.aptlyable.mobile.preview' : 'com.aptlyable.mobile',
     versionCode: release.buildNumber,
+    allowBackup: false,
+    blockedPermissions: [
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.USE_BIOMETRIC',
+      'android.permission.USE_FINGERPRINT',
+      'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE',
+    ],
   },
   web: { bundler: 'metro' },
 };

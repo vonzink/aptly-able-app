@@ -1,13 +1,20 @@
 {
   "legalName": "Aptly Able, LLC",
   "supportEmail": "info@aptlyable.com",
-  "privacyPolicyUrl": "https://www.aptlyable.com/privacy",
-  "supportUrl": "https://www.aptlyable.com/contact",
+  "privacyPolicyUrl": "https://plaud.aptlyable.info/privacy",
+  "supportUrl": "https://plaud.aptlyable.info/support",
   "privacyPolicyReviewed": false,
   "providerPrivacyReviewed": false,
   "providerErasureVerified": false,
   "backupRetentionReviewed": false,
   "hardwareReviewVerified": false,
   "providerEvidencePath": "",
-  "accountDeletionMaxDays": 7
+  "accountDeletionMaxDays": 7,
+  "accountDeletionUrl": "https://plaud.aptlyable.info/support",
+  "android": {
+    "sdkLoggingReviewed": false,
+    "dataSafetyReviewed": false,
+    "pageSizeDeviceVerified": false,
+    "signingIdentityReviewed": false
+  }
 }
