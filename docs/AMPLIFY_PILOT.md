@@ -25,9 +25,10 @@ initial provisioning for a future move.
 2. In AWS Amplify, select **Create new app → Deploy without Git**.
 3. Set the app name to **aptly-able-pilot**, branch **pilot**, method **Drag and drop**.
 4. Upload `aptly-able-amplify.zip` and select **Save and deploy**.
-5. In **Hosting → Rewrites and redirects**, add the two rules from
-   `deploy/amplify/rewrites.json`. Both are **200 rewrites**: `/enroll` and
-   `/enroll/` go to `/index.html`. This lets a QR open the installation page directly.
+5. In **Hosting → Rewrites and redirects**, add the four rules from
+   `deploy/amplify/rewrites.json`. They are **200 rewrites**: `/enroll`,
+   `/enroll/`, `/dashboard` and `/dashboard/` go to `/index.html`. This lets a QR
+   open the installation page directly and supports direct links to the demo.
    Do not add a blanket rewrite that turns missing APK requests into HTML.
 6. In **Hosting → Custom domains**, add `aptlyable.info`. Configure only the
    **plaud** subdomain to point to branch **pilot**. Remove the automatically

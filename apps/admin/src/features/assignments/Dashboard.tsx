@@ -45,9 +45,19 @@ export function Dashboard({
       <div className="workspace-main">
         <header className="topbar">
           <span>{pilot ? 'Your recorder workspace' : 'Administrator workspace'}</span>
-          <button className="text-button" onClick={onSignOut}>
-            Sign out
-          </button>
+          <div className="workspace-account-actions">
+            <a
+              className="workspace-demo-link"
+              href="/dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Dashboard<span className="sr-only"> demo (opens in a new tab)</span>
+            </a>
+            <button className="text-button" onClick={onSignOut}>
+              Sign out
+            </button>
+          </div>
         </header>
         <main className="dashboard">
           <div className="page-heading">

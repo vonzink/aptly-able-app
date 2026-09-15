@@ -1,0 +1,285 @@
+.fleetStats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.deviceGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.deviceCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 11px;
+  padding: 13px 14px 12px;
+  border: 1px solid color-mix(in srgb, var(--tone) 28%, transparent);
+  border-radius: 13px;
+  background: #0c1e39;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
+}
+.deviceCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--tone);
+}
+.deviceCard:hover {
+  border-color: rgba(77, 163, 255, 0.65);
+  background: #102641;
+}
+.attentionCard {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.deviceIdentity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.deviceIdentity > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.deviceIdentity strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deviceIdentity small {
+  display: block;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.deviceRecording {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--tone) 9%, transparent);
+  border-radius: 9px;
+  color: var(--tone);
+}
+.deviceRecording b {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+}
+.deviceTimer {
+  display: block;
+  color: #e8f0fb;
+  font: 700 14px/1.8 var(--mono);
+}
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+}
+.wave i {
+  display: block;
+  width: 2.5px;
+  background: var(--tone);
+  border-radius: 3px;
+  animation: wave 1s infinite;
+}
+.quietWave {
+  opacity: 0.2;
+}
+.quietWave i {
+  animation: none;
+}
+.deviceHealth {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.deviceHealth > div:last-child {
+  flex: 1;
+  min-width: 0;
+}
+.deviceMeta {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.deviceFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid rgba(120, 170, 255, 0.09);
+  padding-top: 8px;
+  color: #bdd4f0;
+  font-size: 10px;
+}
+.deviceFooter > :last-child {
+  white-space: nowrap;
+}
+.missionBottom {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.feed li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 15px;
+  min-height: 49px;
+  border-bottom: 1px solid rgba(120, 170, 255, 0.07);
+  animation: slidein 0.4s ease;
+}
+.feed li:last-child {
+  border-bottom: 0;
+}
+.feed time {
+  width: 65px;
+  flex: none;
+  color: #91a8c7;
+  font: 400 10px var(--mono);
+}
+.feed li > span:nth-of-type(2) {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: #aec7e9;
+}
+.feed b {
+  color: #e8f0fb;
+  font-weight: 700;
+}
+.feed li > span:last-child {
+  font-size: 9px;
+}
+.flagsPanel {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+.flagsPanel h2 > svg {
+  color: #fbbf24;
+}
+.flags {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.flags li {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(120, 170, 255, 0.07);
+}
+.flags li:last-child {
+  border-bottom: 0;
+}
+.flags li > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.flags strong {
+  color: #fbbf24;
+  font: 700 12px var(--mono);
+  white-space: nowrap;
+}
+.flags p {
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: #a8c2e4;
+  margin-top: 2px;
+}
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes slidein {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 1400px) {
+  .fleetStats {
+    gap: 10px;
+  }
+  .deviceCard {
+    padding: 12px 11px;
+  }
+  .deviceFooter {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+}
+@media (max-width: 1180px) {
+  .deviceGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fleetStats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .missionBottom {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .fleetStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fleetStats > :last-child {
+    grid-column: span 2;
+  }
+  .deviceGrid {
+    grid-template-columns: 1fr;
+  }
+  .deviceCard {
+    padding: 15px;
+  }
+  .deviceIdentity strong {
+    font-size: 14px;
+  }
+  .deviceFooter {
+    font-size: 11px;
+    justify-content: space-between;
+  }
+  .feed li {
+    gap: 7px;
+    padding: 10px 12px;
+  }
+  .feed time {
+    width: 54px;
+    font-size: 9px;
+  }
+  .feed li > span:nth-of-type(2) {
+    font-size: 11px;
+  }
+  .flags li {
+    padding: 11px 14px;
+  }
+}

@@ -80,6 +80,33 @@ button.danger {
   background: transparent;
   padding: 8px;
 }
+.workspace-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.workspace-demo-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 5px;
+}
+.workspace-demo-link:hover {
+  color: var(--navy);
+  text-decoration: underline;
+}
+.demo-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #07142a;
+  color: #e8f0fb;
+  font-size: 14px;
+}
 .danger-text {
   color: #b3402c;
 }

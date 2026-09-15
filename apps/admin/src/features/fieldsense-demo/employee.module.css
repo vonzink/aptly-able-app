@@ -1,0 +1,383 @@
+.employeeLayout {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+}
+.roster {
+  background: #08182f;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+.rosterHeading {
+  padding: 20px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rosterHeading h2 {
+  font-size: 15px;
+  font-weight: 800;
+}
+.rosterHeading > div {
+  padding: 3px;
+  gap: 1px;
+}
+.rosterHeading button {
+  padding: 5px 7px;
+  font-size: 10.5px;
+}
+.rosterList {
+  display: flex;
+  flex-direction: column;
+}
+.rosterList > button {
+  width: 100%;
+  min-height: 79px;
+  display: flex;
+  gap: 9px;
+  padding: 13px 12px;
+  border-bottom: 1px solid rgba(120, 170, 255, 0.07);
+  border-left: 3px solid transparent;
+}
+.rosterList > button:hover {
+  background: rgba(77, 163, 255, 0.06);
+}
+.rosterList > button[aria-pressed='true'] {
+  border-left-color: #4da3ff;
+  background: rgba(77, 163, 255, 0.12);
+}
+.rosterList > button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.rosterList strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rosterList small {
+  display: block;
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.rosterNumbers {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  flex: none;
+}
+.rosterNumbers b {
+  font: 700 11px var(--mono);
+}
+.roster > p {
+  padding: 15px 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.employeeIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.employeeName {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.employeeIdentity p {
+  font-size: 12px;
+}
+.employeeStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+.employeeStats > div {
+  padding: 12px 14px;
+}
+.employeeBottom {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 14px;
+  align-items: start;
+}
+.legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 10px;
+  color: #a8c2e4;
+}
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.timelineViewport {
+  overflow-x: auto;
+  padding: 20px 18px 12px;
+}
+.timeline {
+  position: relative;
+  min-width: 650px;
+  height: 137px;
+  margin: 0 7px;
+}
+.hour {
+  position: absolute;
+  top: 12px;
+  bottom: 0;
+  border-left: 1px solid rgba(120, 170, 255, 0.1);
+}
+.hour > span {
+  position: relative;
+  display: inline-block;
+  transform: translateX(-50%);
+  top: -15px;
+  color: #99afd0;
+  font: 400 10px var(--mono);
+}
+.job {
+  position: absolute;
+  height: 43px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid;
+  border-radius: 7px;
+  padding: 4px 7px;
+  overflow: hidden;
+}
+.job strong {
+  font-size: 10.5px;
+  white-space: nowrap;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.job small {
+  color: #bcd6f5;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.job.cap {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(52, 211, 153, 0.55);
+}
+.job.sch {
+  background: rgba(77, 163, 255, 0.18);
+  border-color: rgba(77, 163, 255, 0.55);
+}
+.job.gap {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.55);
+}
+.job:hover {
+  filter: brightness(1.3);
+}
+.nowLine {
+  position: absolute;
+  top: 15px;
+  bottom: 0;
+  width: 2px;
+  background: #fbbf24;
+  pointer-events: none;
+}
+.nowLine > span {
+  position: absolute;
+  top: -14px;
+  left: -20px;
+  padding: 0 4px;
+  font-size: 8px;
+  line-height: 14px;
+  white-space: nowrap;
+  border-radius: 3px;
+  background: #fbbf24;
+  color: #10203a;
+  font-weight: 800;
+}
+.healthDetails {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 16px;
+}
+.healthDetails > div:last-child {
+  flex: 1;
+  min-width: 0;
+}
+.healthDetails dl {
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.healthDetails dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.healthDetails dt {
+  font-size: 10.5px;
+  color: var(--subtle);
+}
+.healthDetails dd {
+  margin: 0;
+  font: 500 10.5px var(--mono);
+}
+.coaching {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 8px;
+}
+.coaching li {
+  padding: 12px 0;
+  border-top: 1px solid rgba(120, 170, 255, 0.09);
+}
+.coaching p {
+  color: #bcd6f5;
+  font-size: 11.5px;
+  line-height: 1.75;
+  margin-top: 7px;
+}
+.moments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.moments li {
+  padding: 15px 16px;
+  border-bottom: 1px solid rgba(120, 170, 255, 0.09);
+}
+.moments li:last-child {
+  border-bottom: 0;
+}
+.moments li > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.moments strong {
+  font-size: 12px;
+  flex: 1;
+}
+.moments b {
+  font: 700 12px var(--mono);
+}
+.moments blockquote {
+  margin: 10px 0 6px;
+  font-size: 11.5px;
+  font-style: italic;
+  color: #cfe1f7;
+  line-height: 1.8;
+}
+.moments footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.moments footer > span {
+  font-size: 10px;
+  color: var(--muted);
+}
+@media (min-width: 1600px) {
+  .employeeLayout {
+    grid-template-columns: 296px minmax(0, 1fr);
+  }
+  .rosterList {
+    gap: 1px;
+  }
+  .rosterList strong {
+    font-size: 13px;
+  }
+  .rosterList small {
+    font-size: 10.5px;
+  }
+}
+@media (max-width: 1350px) {
+  .employeeBottom {
+    grid-template-columns: 1fr;
+  }
+  .employeeStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1100px) {
+  .employeeLayout {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+  .rosterList > button {
+    gap: 6px;
+    padding: 12px 8px;
+  }
+  .rosterList strong {
+    font-size: 11px;
+  }
+}
+@media (max-width: 700px) {
+  .employeeLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .roster {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .rosterHeading {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 14px 10px;
+  }
+  .rosterList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+    padding: 0 8px;
+  }
+  .rosterList > button {
+    min-height: 68px;
+    padding: 9px 7px;
+    border-radius: 7px;
+  }
+  .rosterList > button > span:first-child {
+    width: 26px;
+    height: 26px;
+    font-size: 10px;
+  }
+  .rosterList strong {
+    font-size: 11px;
+    white-space: normal;
+  }
+  .rosterList strong > span {
+    display: none;
+  }
+  .rosterList small {
+    font-size: 9px;
+  }
+  .rosterNumbers {
+    display: none;
+  }
+  .roster > p {
+    padding: 8px 16px;
+    font-size: 10px;
+  }
+  .employeeIdentity {
+    gap: 11px;
+    align-items: flex-start;
+  }
+  .employeeName {
+    gap: 7px;
+  }
+  .employeeName h1 {
+    font-size: 22px;
+  }
+}

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { createApiClient, createAuthClient } from '@aptly/api-client';
 import type { SessionResponse } from '@aptly/contracts';
 import { AccountAccess } from './features/session/AccountAccess';
 import { Dashboard } from './features/assignments/Dashboard';
 import { InstallationPage } from './features/installation/InstallationPage';
+const FieldSenseDemo = lazy(() => import('./features/fieldsense-demo/FieldSenseDemo'));
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4100';
 function WorkspaceApp() {
   const [session, setSession] = useState<{ credential: string; identity: SessionResponse } | null>(
@@ -44,9 +45,18 @@ function WorkspaceApp() {
   );
 }
 export default function App() {
-  return window.location.pathname.replace(/\/$/, '') === '/enroll' ? (
-    <InstallationPage />
-  ) : (
-    <WorkspaceApp />
-  );
+  const path = window.location.pathname.replace(/\/$/, '');
+  if (path === '/dashboard')
+    return (
+      <Suspense
+        fallback={
+          <main className="demo-loading" role="status">
+            Opening dashboard demo…
+          </main>
+        }
+      >
+        <FieldSenseDemo />
+      </Suspense>
+    );
+  return path === '/enroll' ? <InstallationPage /> : <WorkspaceApp />;
 }

@@ -1,0 +1,300 @@
+.sidebar {
+  width: 212px;
+  flex: none;
+  padding: 18px 12px;
+  background: linear-gradient(180deg, #0e3a72 0%, #0a2450 48%, #071730 100%);
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  min-height: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brand {
+  padding: 0 8px 18px;
+  color: #fff;
+}
+.brand strong,
+.mobileBar strong {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.brand small,
+.mobileBar small {
+  display: block;
+  padding-left: 36px;
+  font-size: 11px;
+  color: #9dbce6;
+  margin-top: 2px;
+}
+.primaryNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.primaryNav button {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #c9dcf5;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 11px;
+}
+.primaryNav button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+}
+.primaryNav svg {
+  opacity: 0.85;
+}
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+  margin: 12px 8px;
+}
+.fieldsenseMark {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #1565c0, #0d47a1);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(13, 71, 161, 0.35);
+}
+.viewNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 0 12px;
+}
+.viewNav button {
+  padding: 7px 10px;
+  width: 100%;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a8c2e4;
+}
+.viewNav button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.viewNav button[aria-current='page'] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.sidebarPanel {
+  padding: 0 10px;
+}
+.sidebarPanel h2 {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9dbce6;
+  padding: 20px 0 10px;
+}
+.sidebarPanel dl {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  font-size: 12px;
+}
+.sidebarPanel dl div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebarPanel dt {
+  color: #bdd4f0;
+}
+.sidebarPanel dd {
+  margin: 0;
+  font: 700 12px var(--mono);
+}
+.sidebarPanel > div {
+  margin-bottom: 12px;
+}
+.sidebarPanel .primaryNav {
+  margin: 0 -10px;
+}
+.green {
+  color: #34d399;
+}
+.amber {
+  color: #fbbf24;
+}
+.sidebar footer {
+  margin-top: auto;
+  padding: 24px 10px 2px;
+  color: #94afd3;
+  font-size: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.workspace {
+  flex: 1;
+  min-width: 0;
+  background: #07142a;
+}
+.topbar {
+  min-height: 54px;
+  background: linear-gradient(90deg, #0a2b57, #0e4585);
+  border-bottom: 1px solid rgba(120, 170, 255, 0.16);
+  padding: 7px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.topbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.clock {
+  font: 500 11.5px var(--mono);
+  color: #a8c8f0;
+  white-space: nowrap;
+}
+.topbar .company {
+  color: #e8f0fb;
+  padding: 2px 0 2px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.topbar .company:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.companyAvatar {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4da3ff, #1565c0);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  margin-left: 8px;
+  font-size: 9px;
+}
+.demoBanner {
+  background: #0a1b33;
+  border-bottom: 1px solid var(--border);
+  min-height: 43px;
+  padding: 6px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #b7cce7;
+  font-size: 11px;
+}
+.demoBanner > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.demoBanner button {
+  white-space: nowrap;
+}
+.main {
+  min-width: 0;
+  outline: none;
+}
+.mobileBar {
+  display: none;
+}
+.skipLink {
+  position: fixed;
+  z-index: 50;
+  top: -100px;
+  left: 16px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: #fff;
+  color: #0a2b57;
+}
+.skipLink:focus {
+  top: 12px;
+}
+@media (min-width: 1850px) {
+  .workspace {
+    max-width: 1900px;
+  }
+}
+@media (max-height: 760px) and (min-width: 901px) {
+  .sidebar {
+    position: static;
+    height: auto;
+    min-height: 100vh;
+  }
+}
+@media (max-width: 1100px) {
+  .clock {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .sidebar {
+    display: none;
+  }
+  .sidebarOpen {
+    display: flex;
+    position: fixed;
+    z-index: 30;
+    top: 66px;
+    left: 0;
+    bottom: 0;
+    height: calc(100dvh - 66px);
+    min-height: 0;
+    overflow-y: auto;
+    box-shadow: 15px 12px 50px #0009;
+    width: 240px;
+  }
+  .sidebarOpen .brand {
+    display: none;
+  }
+  .mobileBar {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 31;
+    min-height: 66px;
+    align-items: center;
+    justify-content: space-between;
+    background: #0d3469;
+    padding: 10px 16px;
+    width: 100%;
+  }
+  .workspace {
+    width: 100%;
+  }
+  .topbar {
+    padding: 8px 14px;
+  }
+  .demoBanner {
+    padding: 7px 14px;
+  }
+}
+@media (max-width: 600px) {
+  .companyAvatar {
+    display: none;
+  }
+  .demoBanner {
+    align-items: flex-start;
+  }
+  .demoBanner > span {
+    align-items: flex-start;
+  }
+  .topbar .company {
+    font-size: 11px;
+  }
+}
