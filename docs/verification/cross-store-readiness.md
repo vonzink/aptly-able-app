@@ -81,3 +81,7 @@ This text is a draft request; no message has been sent.
 - The submission verifier intentionally **fails** on the remaining vendor codec alignment and unverified readiness flags. No flags were fabricated or silently bypassed.
 
 Ignored evidence lives in this worktree's `.local/cross-store/`. All changes are local; live notices, services and installed apps have not changed.
+
+## Review disposition
+
+Task-scoped review and independent whole-branch review approved the implementation. The native teardown race and release-verifier gaps identified during review were fixed and re-reviewed. This approval covers code quality and the stated scope, not store acceptance. Branch `codex/cross-store-readiness` is retained locally for integration; `main`, the server and installed apps remain unchanged.
