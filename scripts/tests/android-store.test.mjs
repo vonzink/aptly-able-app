@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   inspectAndroidManifest,
   inspectElf,
+  signatureAccepted,
   androidReadinessErrors,
 } from '../android-store-checks.mjs';
 import { androidBuildCommands, validateSigningEnvironment } from '../android-store.mjs';
@@ -24,10 +25,22 @@ const fixture = () => ({
       'BLUETOOTH_CONNECT',
       'ACCESS_FINE_LOCATION',
       'ACCESS_COARSE_LOCATION',
+      'BLUETOOTH',
+      'BLUETOOTH_ADMIN',
+      'NEARBY_WIFI_DEVICES',
+      'ACCESS_WIFI_STATE',
+      'CHANGE_WIFI_STATE',
+      'ACCESS_NETWORK_STATE',
+      'CHANGE_NETWORK_STATE',
     ].map((name) => ({
       $: {
         'android:name': `android.permission.${name}`,
-        ...(name === 'BLUETOOTH_SCAN' ? { 'android:usesPermissionFlags': 'neverForLocation' } : {}),
+        ...(['BLUETOOTH', 'BLUETOOTH_ADMIN'].includes(name)
+          ? { 'android:maxSdkVersion': '30' }
+          : {}),
+        ...(['BLUETOOTH_SCAN', 'NEARBY_WIFI_DEVICES'].includes(name)
+          ? { 'android:usesPermissionFlags': 'neverForLocation' }
+          : {}),
       },
     })),
     application: [
@@ -123,4 +136,52 @@ test('compiled permission flags retain neverForLocation and backup rules exclude
     assert.equal(extractionRules.split(`domain="${domain}" path="."`).length - 1, 2);
   }
   assert.ok(extractionRules.includes('<device-transfer>'));
+});
+
+test('release gate rejects missing target SDK and permissions restricted on newer devices', () => {
+  for (const target of [undefined, 'unknown', '35', '36.5']) {
+    const m = fixture();
+    m.manifest['uses-sdk'][0].$['android:targetSdkVersion'] = target;
+    assert.ok(check(m).some((error) => error.includes('Target SDK')));
+  }
+  for (const name of ['BLUETOOTH', 'BLUETOOTH_ADMIN', 'NEARBY_WIFI_DEVICES']) {
+    const m = fixture();
+    m.manifest['uses-permission'] = m.manifest['uses-permission'].filter(
+      (row) => row.$['android:name'] !== `android.permission.${name}`,
+    );
+    assert.ok(check(m).some((error) => error.includes(name)));
+  }
+  for (const name of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'BLUETOOTH_SCAN']) {
+    const m = fixture();
+    m.manifest['uses-permission'].find(
+      (row) => row.$['android:name'] === `android.permission.${name}`,
+    ).$['android:maxSdkVersion'] = '30';
+    assert.ok(check(m).some((error) => error.includes('does not cover')));
+  }
+});
+
+test('signature exception accepts only self-signed trust errors, not invalid certificates', () => {
+  const output =
+    '\njar verified, with signer errors.\n\nError: \nThis jar contains entries whose certificate chain is invalid. Reason: PKIX path building failed: unable to find valid certification path\nThis jar contains entries whose signer certificate is self-signed.\n\nWarning: \nNo timestamp.\n';
+  assert.equal(signatureAccepted({ status: 4, stdout: output }), true);
+  assert.equal(signatureAccepted({ status: 0, stdout: 'jar verified.' }), true);
+  for (const message of [
+    'signer certificate has expired.',
+    'signer certificate is not yet valid.',
+    'disabled signature algorithm.',
+    'unexpected severe signer failure.',
+  ]) {
+    assert.equal(
+      signatureAccepted({
+        status: 4,
+        stdout: output.replace('\nWarning:', `\n${message}\nWarning:`),
+      }),
+      false,
+    );
+  }
+  assert.equal(signatureAccepted({ status: 16, stdout: output }), false);
+  assert.equal(
+    signatureAccepted({ status: 4, stdout: 'jar verified, with signer errors.' }),
+    false,
+  );
 });

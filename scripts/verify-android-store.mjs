@@ -11,6 +11,7 @@ import { validateStoreEnvironment, readinessErrors } from './ios-store-config.mj
 import {
   inspectAndroidManifest,
   inspectElf,
+  signatureAccepted,
   androidReadinessErrors,
 } from './android-store-checks.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -71,14 +72,8 @@ export async function verifyAndroidBundle(bundle, env = process.env) {
       ['-J-Duser.language=en', '-verify', '-strict', bundle],
       { encoding: 'utf8', timeout: 120_000 },
     );
-    // Strict status 4 includes the expected self-signed Android upload certificate.
-    // All other bits, including unsigned entries (16), remain a hard failure.
-    if (
-      signature.error ||
-      ![0, 4].includes(signature.status) ||
-      !signature.stdout.includes('jar verified')
-    )
-      errors.push('Bundle signature failed or contains unsigned entries.');
+    if (!signatureAccepted(signature))
+      errors.push('Bundle signature failed or contains unexpected signer errors/unsigned entries.');
     const certificate = run('keytool', [
       '-J-Duser.language=en',
       '-printcert',

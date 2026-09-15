@@ -33,7 +33,11 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
   )
     errors.push('Stale release version/name.');
   const sdk = manifest['uses-sdk']?.[0]?.$ ?? {};
-  if (Number(sdk['android:targetSdkVersion']) < 36) errors.push('Target SDK must be 36 or newer.');
+  if (
+    !Number.isInteger(Number(sdk['android:targetSdkVersion'])) ||
+    Number(sdk['android:targetSdkVersion']) < 36
+  )
+    errors.push('Target SDK must be 36 or newer.');
   if (Number(sdk['android:minSdkVersion']) !== 24)
     errors.push('Review the changed minimum SDK/support matrix.');
   if (attrs['android:debuggable'] === 'true' || attrs['android:testOnly'] === 'true')
@@ -70,15 +74,30 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
     )
       errors.push(`Missing neverForLocation flag: ${name}`);
   }
-  for (const name of [
-    'INTERNET',
-    'BLUETOOTH_SCAN',
-    'BLUETOOTH_CONNECT',
-    'ACCESS_FINE_LOCATION',
-    'ACCESS_COARSE_LOCATION',
-  ]) {
-    if (!permissions.some((p) => p.$?.['android:name'] === `android.permission.${name}`))
-      errors.push(`Missing SDK-required permission: ${name}`);
+  const requiredCoverage = {
+    INTERNET: [24, Infinity],
+    BLUETOOTH: [24, 30],
+    BLUETOOTH_ADMIN: [24, 30],
+    BLUETOOTH_SCAN: [31, Infinity],
+    BLUETOOTH_CONNECT: [31, Infinity],
+    ACCESS_FINE_LOCATION: [24, Infinity],
+    ACCESS_COARSE_LOCATION: [24, Infinity],
+    NEARBY_WIFI_DEVICES: [33, Infinity],
+    ACCESS_WIFI_STATE: [24, Infinity],
+    CHANGE_WIFI_STATE: [24, Infinity],
+    ACCESS_NETWORK_STATE: [24, Infinity],
+    CHANGE_NETWORK_STATE: [24, Infinity],
+  };
+  for (const [name, [, lastSdk]] of Object.entries(requiredCoverage)) {
+    const rows = permissions.filter((p) => p.$?.['android:name'] === `android.permission.${name}`);
+    if (!rows.length) errors.push(`Missing SDK-required permission: ${name}`);
+    else if (
+      !rows.some((row) => {
+        const limit = row.$['android:maxSdkVersion'];
+        return limit === undefined || (Number.isInteger(Number(limit)) && Number(limit) >= lastSdk);
+      })
+    )
+      errors.push(`SDK-required permission does not cover supported Android versions: ${name}`);
   }
   const metadata = Object.fromEntries(
     (app['meta-data'] ?? []).map((row) => [row.$?.['android:name'], row.$?.['android:value']]),
@@ -153,4 +172,33 @@ export function androidReadinessErrors(metadata) {
   ]
     .filter((key) => metadata.android?.[key] !== true)
     .map((key) => `Android readiness blocked: ${key} needs recorded verification.`);
+}
+
+export function signatureAccepted(result) {
+  if (result.error || ![0, 4].includes(result.status) || !result.stdout?.includes('jar verified'))
+    return false;
+  const text = `${result.stdout}\n${result.stderr ?? ''}`;
+  if (/\b(disabled|expired)\b|not[- ]yet[- ]valid/i.test(text)) return false;
+  if (result.status === 0) return true;
+  // Android upload certificates are commonly self-signed. Only these two known
+  // trust errors are exempted; all other strict verification errors fail closed.
+  const section = text.split(/\nError:\s*\n/)[1]?.split(/\nWarning:\s*\n/)[0];
+  if (!section) return false;
+  const lines = section
+    .trim()
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return (
+    lines.some(
+      (line) => line === 'This jar contains entries whose signer certificate is self-signed.',
+    ) &&
+    lines.every(
+      (line) =>
+        line === 'This jar contains entries whose signer certificate is self-signed.' ||
+        line.startsWith(
+          'This jar contains entries whose certificate chain is invalid. Reason: PKIX path building failed:',
+        ),
+    )
+  );
 }
