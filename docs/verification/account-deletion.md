@@ -37,15 +37,18 @@ Provider calls hold per-account shared locks through the existing provider check
 
 No documented Plaud account/data deletion endpoint was established by this implementation. No vendor erasure API is invented. Every request remains pending for `provider_erasure` and `backup_retention`, even when there are no known transcriptions. Device SDK sessions and binding data can also exist at Plaud.
 
+Use the [account deletion runbook](../operations/account-deletion-runbook.md) for deadline triage, evidence requirements, escalation and closure. Its procedure still needs an assigned operator and deployed monitoring.
+
 1. Assign an authorized operator and operational monitoring for the durable queue. Inspect pending/error counts, oldest request age, and `last_error`; investigate repeated cleanup failures. The owner-approved maximum is seven days, including provider and backup cleanup. A staffed queue, vendor agreement and alerting deployment are still required; code cannot establish that operational capacity.
 2. Build the API, then use the restricted operational CLI with the intended environment selected explicitly:
 
    ```sh
+   node apps/api/dist/bootstrap/account-deletion-operator.js status
    node apps/api/dist/bootstrap/account-deletion-operator.js queue
    node apps/api/dist/bootstrap/account-deletion-operator.js inspect REQUEST_UUID
    ```
 
-   `queue` lists up to 100 pending requests ordered by deadline, with overdue and cleanup flags, retry count and sanitized error. It is read-only and does not send alerts.
+   `status` reports aggregate counts across the full ledger, including overdue requests, deadlines within 24 hours, unknown legacy deadlines, service failures, unfinished gates and completed-late history. Exit 2 means overdue work, an unknown deadline or a service failure needs attention; exit 0 only means none of those conditions was observed. Exit 1 is a command/configuration/database failure. `queue` lists up to 100 pending requests ordered by deadline, with overdue and cleanup flags, retry count and sanitized error. `inspect` adds per-request overdue and pending-work fields; a legacy unknown deadline produces `overdue: null`. All three are read-only and do not send alerts.
 
    `DATABASE_URL` and `RECORDINGS_DIRECTORY` must point to the intended service. The inspect output contains cleanup identifiers: handle it as confidential and do not attach it to public tickets.
 
@@ -57,13 +60,15 @@ No documented Plaud account/data deletion endpoint was established by this imple
    node apps/api/dist/bootstrap/account-deletion-operator.js confirm-external-erasure REQUEST_UUID /absolute/private/evidence.json
    ```
 
-   This records evidence and wakes the durable queue; it does not itself declare success. The worker sets `complete` only after service erasure and both recorded external confirmations. Provider scope is cleared after confirmed vendor erasure. A minimal deletion ledger (request/user UUID, hashed receipt credential, timestamps and evidence references) remains for status and restore protection; owner-reviewed ledger retention is still required. Never put raw recordings, transcripts or account passwords in evidence.
+   This records evidence and wakes the durable queue; it does not itself declare success. An identical confirmation retry preserves the first evidence/timestamp, even after completion. Conflicting evidence is rejected for review. The worker sets `complete` only after service erasure and both recorded external confirmations. Provider scope is cleared after confirmed vendor erasure. A minimal deletion ledger (request/user UUID, hashed receipt credential, timestamps and evidence references) remains for status and restore protection; owner-reviewed ledger retention is still required. Never put raw recordings, transcripts or account passwords in evidence.
 
 ## Local verification
 
 Meaningful tests cover missing/wrong credentials, password reauthentication, loss-of-response idempotency, session/login lockout, another account remaining usable, missing operator evidence, honest pending status, successful evidence-gated completion, filesystem failure/retry ordering, reserved temporary file cleanup, ongoing upload/bind/provider-failure concurrency, post-request provider suppression, malformed HTTP confirmation and bounded HTTP attempts. Existing processing, identity, device and capacity integration tests remain green against disposable schemas in local PostgreSQL at 127.0.0.1:55432.
 
 Production migration application, provider cleanup agreements, infrastructure/backup inventory, queue ownership/alerts, restore testing and end-to-end real-account erasure remain required before claiming operational/App Store readiness.
+
+The September 15 cross-store hardening adds real-PostgreSQL operator tests against disposable schemas: status over a backlog larger than the 100-row queue display, deadline/failure escalation, missing legacy deadlines, overdue history, confidential aggregate output, read-only inspection, evidence-preserving retries and conflicting evidence rejection. These tests use synthetic records and establish no vendor or production erasure evidence.
 
 ## Phone recovery safeguards
 

@@ -302,3 +302,38 @@ test('in-flight provider failure is captured before deletion and no resubmission
   await a.deletion.tick();
   expect((await a.deletion.status(a.authorization)).pendingWork).toContain('provider_erasure');
 });
+
+test('operator evidence confirmation can be retried after completion without overwriting the first evidence', async () => {
+  const a = await fixture();
+  const receipt = await a.deletion.request(a.authorization, input);
+  const evidence = {
+    providerEvidence: 'Confirmed provider erasure, ticket TEST-1234.',
+    backupEvidence: 'Confirmed backup erasure, inventory TEST-1234.',
+    confirmedBy: 'test-operator',
+  };
+  await a.deletion.confirmExternalErasure(receipt.requestId, evidence);
+  const stored = async () =>
+    (
+      await pool.query(
+        'SELECT provider_evidence, backup_evidence, confirmed_by, confirmed_at::text, expected_completion_at::text FROM account_deletions WHERE id=$1',
+        [receipt.requestId],
+      )
+    ).rows[0];
+  const first = await stored();
+  await a.deletion.confirmExternalErasure(receipt.requestId, evidence);
+  expect(await stored()).toEqual(first);
+  await expect(
+    a.deletion.confirmExternalErasure(receipt.requestId, {
+      ...evidence,
+      providerEvidence: 'Different unreviewed evidence TEST-9999.',
+    }),
+  ).rejects.toThrow();
+  expect(await stored()).toEqual(first);
+  await a.deletion.tick();
+  expect((await a.deletion.status(a.authorization)).status).toBe('complete');
+  await expect(
+    a.deletion.confirmExternalErasure(receipt.requestId, evidence),
+  ).resolves.toBeUndefined();
+  expect(await stored()).toEqual(first);
+  await expect(a.deletion.confirmExternalErasure(randomUUID(), evidence)).rejects.toThrow();
+});

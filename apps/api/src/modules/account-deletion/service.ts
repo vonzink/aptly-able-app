@@ -179,10 +179,20 @@ export function createAccountDeletionService(pool: pg.Pool, storage: AudioStorag
       )
         throw new Error('Recorded erasure evidence and operator identity are required.');
       const result = await pool.query(
-        'UPDATE account_deletions SET provider_evidence=$2,backup_evidence=$3,confirmed_by=$4,confirmed_at=clock_timestamp(),next_attempt_at=clock_timestamp() WHERE id=$1 AND completed_at IS NULL RETURNING id',
+        'UPDATE account_deletions SET provider_evidence=$2,backup_evidence=$3,confirmed_by=$4,confirmed_at=clock_timestamp(),next_attempt_at=clock_timestamp() WHERE id=$1 AND completed_at IS NULL AND provider_evidence IS NULL AND backup_evidence IS NULL AND confirmed_by IS NULL RETURNING id',
         [requestId, input.providerEvidence, input.backupEvidence, input.confirmedBy],
       );
-      if (!result.rowCount) throw new Error('Pending request not found.');
+      if (result.rowCount) return;
+      // An interrupted operator command may be retried after the worker completed.
+      // Preserve the original evidence and timestamp; conflicting attestations need review.
+      const previous = await pool.query(
+        'SELECT id FROM account_deletions WHERE id=$1 AND provider_evidence=$2 AND backup_evidence=$3 AND confirmed_by=$4',
+        [requestId, input.providerEvidence, input.backupEvidence, input.confirmedBy],
+      );
+      if (!previous.rowCount)
+        throw new Error(
+          'Request not found or erasure evidence conflicts with the recorded confirmation.',
+        );
     },
   };
 }
