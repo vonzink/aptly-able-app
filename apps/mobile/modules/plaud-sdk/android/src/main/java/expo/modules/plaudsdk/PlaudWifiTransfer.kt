@@ -7,7 +7,6 @@ import expo.modules.kotlin.Promise
 import java.io.File
 import sdk.PlaudDeviceAgent
 import sdk.audio.AudioExportFormat
-import sdk.audio.AudioExporter
 import sdk.ble.wifi.IWifiTransferAgent
 import sdk.ble.wifi.IWifiTransferAgent.WifiConnectionState
 import sdk.ble.wifi.IWifiTransferAgent.WifiFileInfo
@@ -19,17 +18,17 @@ internal class PlaudWifiTransfer(
   private val emit: (String, Bundle) -> Unit
 ) {
   private var opening: Promise? = null
-  private var exporting = false
+  private var exporting: PlaudExportOperation? = null
   private var active = false
   private var joining = false
   private var epoch = 0L
   private var serial = ""
   private var files = emptySet<Long>()
   private var timeout: Runnable? = null
-  val busy: Boolean get() = active || opening != null || exporting
+  val busy: Boolean get() = active || opening != null || exporting != null
 
   fun start(deviceSerial: String, promise: Promise) {
-    if (busy || deviceSerial.isBlank() || !PlaudDeviceAgent.isConnected()) {
+    if (busy || PlaudExportGate.shared.isBusy() || deviceSerial.isBlank() || !PlaudDeviceAgent.isConnected()) {
       promise.reject("ERR_PLAUD_WIFI_BUSY", "Connect the recorder and finish its previous transfer first.", null)
       return
     }
@@ -71,45 +70,32 @@ internal class PlaudWifiTransfer(
   }
 
   fun export(sessionId: Long, directory: File, promise: Promise) {
-    if (!active || opening != null || exporting || sessionId !in files ||
+    if (!active || opening != null || exporting != null || sessionId !in files ||
       PlaudDeviceAgent.getWifiAgent()?.getConnectionState() != WifiConnectionState.READY) {
       promise.reject("ERR_PLAUD_WIFI_NOT_READY", "The Wi-Fi recording session is not ready.", null)
       return
     }
-    var settled = false
-    fun finish(output: File?) {
-      if (settled) return
-      settled = true
-      exporting = false
-      if (output != null) {
-        promise.resolve(bundleOf("sessionId" to sessionId, "outputPath" to output.absolutePath))
-      } else {
-        promise.reject("ERR_PLAUD_WIFI_EXPORT", "Wi-Fi audio transfer failed. Use Bluetooth or reconnect and try again.", null)
-      }
-    }
     try {
       check(directory.isDirectory || directory.mkdirs())
-      exporting = true
-      PlaudDeviceAgent.exportAudioViaWiFi(
-        sessionId, directory, AudioExportFormat.MP3, 1,
-        object : AudioExporter.ExportCallback {
-          override fun onProgress(progress: Int, message: String) {
-            main.post {
-              if (active && !settled) emit("exportProgress", bundleOf(
-                "sessionId" to sessionId, "progress" to progress, "message" to "Receiving over Wi-Fi"
-              ))
-            }
-          }
-          override fun onComplete(output: File) { main.post { finish(output) } }
-          override fun onError(error: String) { main.post { finish(null) } }
-        }
-      )
     } catch (_: Exception) {
-      finish(null)
+      promise.reject("ERR_PLAUD_WIFI_EXPORT", "Recording audio could not be saved.", null)
+      return
     }
+    val lease = PlaudExportGate.shared.acquire()
+    if (lease == null) {
+      promise.reject("ERR_PLAUD_BUSY", "The previous transfer has not finished. Fully close and reopen the app if it stopped responding.", null)
+      return
+    }
+    val operation = PlaudExportOperation(main, promise, lease, sessionId, directory, "Wi-Fi", emit) { exporting = null }
+    exporting = operation
+    operation.started()
+    try {
+      PlaudDeviceAgent.exportAudioViaWiFi(sessionId, directory, AudioExportFormat.MP3, 1, operation)
+    } catch (_: Exception) { operation.startFailed() }
   }
 
-  fun close(message: String = "Wi-Fi transfer stopped.") {
+  fun close(message: String = "Wi-Fi transfer stopped.", stopSdk: Boolean = true) {
+    exporting?.cancel()
     if (!active && opening == null) return
     ++epoch
     active = false
@@ -119,6 +105,7 @@ internal class PlaudWifiTransfer(
     val pending = opening
     opening = null
     pending?.reject("ERR_PLAUD_WIFI", message, null)
+    if (!stopSdk) return
     // Attempt every cleanup even if an SDK call throws. Keep export ownership until its
     // terminal callback; releasing it early would let a second exporter reuse SDK buffers.
     runCatching { PlaudDeviceAgent.getWifiAgent()?.stopWifiTransfer() }

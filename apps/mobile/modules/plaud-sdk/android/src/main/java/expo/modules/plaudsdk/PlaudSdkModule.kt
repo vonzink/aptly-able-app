@@ -17,6 +17,7 @@ import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
 import com.tinnotech.penblesdk.entity.BleDevice
 import com.tinnotech.penblesdk.entity.BleFile
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +87,7 @@ private class PlaudSdkException(message: String, code: String = "ERR_PLAUD") :
  */
 class PlaudSdkModule : Module() {
   private val main = Handler(Looper.getMainLooper())
+  private val pendingCalls = PlaudPendingCalls { main.post(it) }
 
   /**
    * Connect can't be a straight-through call on Android: the handshake has two async
@@ -129,16 +131,18 @@ class PlaudSdkModule : Module() {
     return epoch
   }
 
-  private fun invalidateScan() {
-    scanEpoch.incrementAndGet()
+  private fun invalidateScan(): Long {
+    val epoch = scanEpoch.incrementAndGet()
     isScanning = false
+    return epoch
   }
 
   private val context: Context
     get() = appContext.reactContext ?: throw PlaudSdkException("React context is unavailable")
 
   private fun emit(event: String, body: Bundle) = main.post {
-    if (!destroyed) sendEvent(event, body)
+    // React can disappear after a vendor callback has already been queued.
+    if (!destroyed) runCatching { sendEvent(event, body) }
   }
 
   private fun dispatchSdk(
@@ -147,21 +151,10 @@ class PlaudSdkModule : Module() {
     message: String,
     operation: () -> Any?
   ) {
-    // Catch inside the posted work: Expo cannot catch exceptions on a later main-thread turn.
-    val posted = main.post {
-      if (destroyed) {
-        promise.reject(PlaudSdkException("SDK session ended", "ERR_PLAUD_CANCELLED"))
-      } else {
-        try {
-          promise.resolve(operation())
-        } catch (failure: PlaudSdkException) {
-          promise.reject(failure)
-        } catch (_: Exception) {
-          promise.reject(PlaudSdkException(message, code))
-        }
-      }
+    val call = pendingCalls.track(promise)
+    pendingCalls.dispatch(call, code, message, { !destroyed }) {
+      call.resolve(operation())
     }
-    if (!posted) promise.reject(PlaudSdkException("SDK session ended", "ERR_PLAUD_CANCELLED"))
   }
 
   private fun requireConnected() {
@@ -196,14 +189,18 @@ class PlaudSdkModule : Module() {
       }
       val epoch = invalidateConnection()
       invalidateScan()
-      userId = options.userId
       // Resolve the context up front: throwing from inside `main.post` would surface as an
       // uncaught main-thread crash instead of a rejected promise.
       val ctx = context.applicationContext
-      main.post {
-        if (destroyed || epoch != connectionEpoch.get()) {
-          promise.reject(PlaudSdkException("SDK initialization cancelled", "ERR_PLAUD_CANCELLED"))
-          return@post
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_INIT", "SDK initialization failed", {
+        !destroyed && epoch == connectionEpoch.get()
+      }) {
+        // Replacing process-wide credentials while an old exporter is still running can
+        // cross account boundaries. A JS timeout/disconnect does not prove it has stopped.
+        if (PlaudExportGate.shared.isBusy()) {
+          call.reject("ERR_PLAUD_BUSY", "The previous transfer has not finished. Fully close and reopen the app before starting another recorder session.", null)
+          return@dispatch
         }
         // The SDK's Partner API (gen-key / sn-sign) hardcodes platform-jp and does *not*
         // follow `customDomain`. Point it at the right host first, or a non-JP token 401s,
@@ -213,9 +210,10 @@ class PlaudSdkModule : Module() {
           NiceBuildSdk.getPartnerApiManager().updateBaseUrl("https://${options.customDomain}")
           PlaudDeviceAgent.listener = listener
           PlaudDeviceAgent.initSDK(ctx, options.userAccessToken, options.customDomain)
-          promise.resolve(null)
+          userId = options.userId
+          call.resolve(null)
         } catch (_: Exception) {
-          promise.reject(PlaudSdkException("SDK initialization failed", "ERR_PLAUD_INIT"))
+          call.reject(PlaudSdkException("SDK initialization failed", "ERR_PLAUD_INIT"))
         }
       }
     }
@@ -226,53 +224,53 @@ class PlaudSdkModule : Module() {
      * `startScan` also calls it, so the JS surface stays identical to iOS.
      */
     AsyncFunction("requestPermissions") { promise: Promise ->
-      requestBlePermissions { granted ->
-        promise.resolve(bundleOf("granted" to granted))
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_PERMISSIONS", "Device permissions could not be requested.", { !destroyed }) {
+        requestBlePermissions { granted ->
+          pendingCalls.dispatch(call, "ERR_PLAUD_PERMISSIONS", "Device permissions could not be read.", { !destroyed }) {
+            call.resolve(bundleOf("granted" to granted))
+          }
+        }
       }
     }
 
     AsyncFunction("startScan") { promise: Promise ->
+      val call = pendingCalls.track(promise)
       val epoch = scanEpoch.incrementAndGet()
-      requestBlePermissions { granted ->
-        if (destroyed || epoch != scanEpoch.get()) {
-          promise.reject(PlaudSdkException("Scan cancelled", "ERR_PLAUD_CANCELLED"))
-          return@requestBlePermissions
-        }
-        if (!granted) {
-          promise.reject(
-            PlaudSdkException(
-              "Bluetooth permissions were denied — scanning is not possible",
-              "ERR_PLAUD_PERMISSIONS"
-            )
-          )
-          return@requestBlePermissions
-        }
-        if (!isBluetoothOn()) {
-          // Mirrors the iOS module's `bluetoothNotPoweredOn` timeout: the SDK silently drops
-          // scans while the adapter is off, so surface it instead of hanging.
-          isScanning = false
-          emit("scanTimeout", bundleOf("reason" to "bluetoothNotPoweredOn"))
-          promise.resolve(null)
-          return@requestBlePermissions
-        }
-        main.post {
-          if (destroyed || epoch != scanEpoch.get()) {
-            promise.reject(PlaudSdkException("Scan cancelled", "ERR_PLAUD_CANCELLED"))
-            return@post
+      val current = { !destroyed && epoch == scanEpoch.get() }
+      pendingCalls.dispatch(call, "ERR_PLAUD_SCAN", "Scanning could not be started.", current) {
+        requestBlePermissions { granted ->
+          // Permission callbacks may run on any thread and may arrive after stop/destroy.
+          pendingCalls.dispatch(call, "ERR_PLAUD_SCAN", "Scanning could not be started.", current) {
+            if (!granted) {
+              call.reject("ERR_PLAUD_PERMISSIONS", "Bluetooth permissions were denied — scanning is not possible", null)
+            } else if (!isBluetoothOn()) {
+              isScanning = false
+              emit("scanTimeout", bundleOf("reason" to "bluetoothNotPoweredOn"))
+              call.resolve(null)
+            } else {
+              try {
+                isScanning = true
+                PlaudDeviceAgent.startScan()
+                call.resolve(null)
+              } catch (failure: Exception) {
+                isScanning = false
+                throw failure
+              }
+            }
           }
-          isScanning = true
-          PlaudDeviceAgent.startScan()
-          promise.resolve(null)
         }
       }
     }
 
     AsyncFunction("stopScan") { promise: Promise ->
-      invalidateScan()
-      main.post {
-        isScanning = false
+      val epoch = invalidateScan()
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_SCAN", "Scanning could not be stopped.", {
+        !destroyed && epoch == scanEpoch.get()
+      }) {
         PlaudDeviceAgent.stopScan()
-        promise.resolve(null)
+        call.resolve(null)
       }
     }
 
@@ -282,21 +280,20 @@ class PlaudSdkModule : Module() {
       val token = options.deviceToken ?: userId
       val epoch = invalidateConnection()
       invalidateScan()
-      main.post {
-        if (destroyed || epoch != connectionEpoch.get()) {
-          promise.reject(PlaudSdkException("Connection cancelled", "ERR_PLAUD_CANCELLED"))
-          return@post
-        }
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_CONNECT", "Connection could not be started.", {
+        !destroyed && epoch == connectionEpoch.get()
+      }) {
         isScanning = false
         val device = lookupDevice(options.uuid, options.serialNumber)
         if (device == null) {
-          promise.reject(
+          call.reject(
             PlaudSdkException(
               "Unknown device — scan first, then connect by uuid or serialNumber",
               "ERR_PLAUD_UNKNOWN_DEVICE"
             )
           )
-          return@post
+          return@dispatch
         }
         connectedDevice = device
         connectJob = scope.launch {
@@ -309,11 +306,11 @@ class PlaudSdkModule : Module() {
             } else {
               PlaudDeviceAgent.connectBleDevice(device)
             }
-            promise.resolve(null)
+            call.resolve(null)
           } catch (_: CancellationException) {
-            promise.reject(PlaudSdkException("Connection cancelled", "ERR_PLAUD_CANCELLED"))
+            call.reject(PlaudSdkException("Connection cancelled", "ERR_PLAUD_CANCELLED"))
           } catch (_: Exception) {
-            promise.reject(PlaudSdkException("Device handshake preparation failed", "ERR_PLAUD_CONNECT"))
+            call.reject(PlaudSdkException("Device handshake preparation failed", "ERR_PLAUD_CONNECT"))
           }
         }
       }
@@ -383,9 +380,9 @@ class PlaudSdkModule : Module() {
       // resolves with is readable by the JS side exactly as on iOS. Resolved before the post
       // so a missing context rejects the promise rather than crashing the main thread.
       val exportsDir = File(context.filesDir, "PlaudExports")
-      main.post {
-        if (destroyed) promise.reject(PlaudSdkException("SDK session ended", "ERR_PLAUD_CANCELLED"))
-        else actions.exportBle(sessionId, exportsDir, format, options.channels, promise)
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_EXPORT", "Recording audio could not be received.", { !destroyed }) {
+        actions.exportBle(sessionId, exportsDir, format, options.channels, call)
       }
     }
 
@@ -393,15 +390,17 @@ class PlaudSdkModule : Module() {
       val own = wifiEpoch.incrementAndGet()
       val required = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         blePermissions() + Manifest.permission.NEARBY_WIFI_DEVICES else blePermissions()
-      requestNativePermissions(required) { granted ->
-        main.post {
-          if (destroyed || own != wifiEpoch.get()) {
-            promise.reject(PlaudSdkException("Wi-Fi setup cancelled", "ERR_PLAUD_CANCELLED"))
-          } else if (!granted) {
-            promise.reject(PlaudSdkException("Allow nearby-device and Wi-Fi access to transfer recordings.", "ERR_PLAUD_PERMISSIONS"))
-          } else {
-            // The pinned SDK expects the connected recorder SN here, not the app user ID.
-            actions.startWifi(connectedDevice?.serialNumber ?: "", promise)
+      val call = pendingCalls.track(promise)
+      val current = { !destroyed && own == wifiEpoch.get() }
+      pendingCalls.dispatch(call, "ERR_PLAUD_WIFI", "Wi-Fi transfer could not be started.", current) {
+        requestNativePermissions(required) { granted ->
+          pendingCalls.dispatch(call, "ERR_PLAUD_WIFI", "Wi-Fi transfer could not be started.", current) {
+            if (!granted) {
+              call.reject(PlaudSdkException("Allow nearby-device and Wi-Fi access to transfer recordings.", "ERR_PLAUD_PERMISSIONS"))
+            } else {
+              // The pinned SDK expects the connected recorder SN here, not the app user ID.
+              actions.startWifi(connectedDevice?.serialNumber ?: "", call)
+            }
           }
         }
       }
@@ -415,9 +414,9 @@ class PlaudSdkModule : Module() {
     }
     AsyncFunction("exportAudioViaWifi") { options: ExportOptions, promise: Promise ->
       val directory = File(context.filesDir, "PlaudExports")
-      main.post {
-        if (destroyed) promise.reject(PlaudSdkException("SDK session ended", "ERR_PLAUD_CANCELLED"))
-        else actions.exportWifi(options.sessionId, directory, promise)
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_WIFI_EXPORT", "Wi-Fi audio transfer could not be started.", { !destroyed }) {
+        actions.exportWifi(options.sessionId, directory, call)
       }
     }
     AsyncFunction("controlRecorder") { options: RecorderControlOptions, promise: Promise ->
@@ -431,11 +430,14 @@ class PlaudSdkModule : Module() {
       destroyed = true
       invalidateConnection()
       invalidateScan()
-      main.post { actions.reset() }
-      // The SDK's listener is a process-wide static; leaving ours attached would keep this
-      // module (and the React context) alive across reloads.
-      if (PlaudDeviceAgent.listener === listener) {
-        PlaudDeviceAgent.listener = null
+      pendingCalls.destroy()
+      main.post {
+        actions.reset(stopSdk = PlaudDeviceAgent.listener === listener)
+        // Do not detach or stop a newer module's process-wide SDK session.
+        if (PlaudDeviceAgent.listener === listener) {
+          runCatching { PlaudDeviceAgent.stopScan() }
+          PlaudDeviceAgent.listener = null
+        }
       }
       scope.cancel()
     }
@@ -445,6 +447,7 @@ class PlaudSdkModule : Module() {
 
   private val listener = object : PlaudDeviceAgentListener {
     override fun bleScanResult(bleDevices: List<BleDevice>) {
+      if (destroyed || !isScanning) return
       synchronized(scannedDevices) {
         for (d in bleDevices) scannedDevices[d.macAddress] = d
       }
@@ -466,17 +469,19 @@ class PlaudSdkModule : Module() {
     }
 
     override fun bleScanOverTime() {
+      if (destroyed || !isScanning) return
       isScanning = false
       emit("scanTimeout", Bundle())
     }
 
     override fun bleConnectState(state: Int) {
+      if (destroyed) return
       // 1 = connected, 0 = disconnected, {2, -1, -2} = connection/handshake failure.
       val failed = state == 2 || state == -1 || state == -2
       if (state != 1) {
         connectedDevice = null
         wifiEpoch.incrementAndGet()
-        main.post { actions.reset() }
+        main.post { if (!destroyed) actions.reset() }
       }
       emit(
         "connectState",
@@ -498,7 +503,7 @@ class PlaudSdkModule : Module() {
         com.tinnotech.penblesdk.Constants.DeviceStatus.IDLE -> if (keyState == 0) "idle" else "unknown"
         else -> "unknown"
       }
-      main.post { actions.state(recordingState) }
+      main.post { if (!destroyed) actions.state(recordingState) }
       emit(
         "penState",
         bundleOf("state" to state, "privacy" to privacy, "keyState" to keyState, "uDisk" to uDisk,
@@ -507,9 +512,10 @@ class PlaudSdkModule : Module() {
     }
 
     override fun bleDepair(status: Int) {
+      if (destroyed) return
       connectedDevice = null
       wifiEpoch.incrementAndGet()
-      main.post { actions.reset() }
+      main.post { if (!destroyed) actions.reset() }
       emit("depair", bundleOf("status" to status))
     }
 
@@ -531,7 +537,7 @@ class PlaudSdkModule : Module() {
     override fun bleRecordStart(
       sessionId: Long, start: Long, status: Int, scene: Int, startTime: Long, reason: Int
     ) {
-      if (status == 0) main.post { actions.recorded(sessionId) }
+      if (status == 0) main.post { if (!destroyed) actions.recorded(sessionId) }
       emit(
         "recordStart",
         bundleOf(
@@ -542,19 +548,19 @@ class PlaudSdkModule : Module() {
     }
 
     override fun bleRecordStop(sessionId: Long, reason: Int, fileExist: Boolean, fileSize: Long) {
-      main.post { actions.recorded(sessionId, stopped = true) }
+      main.post { if (!destroyed) actions.recorded(sessionId, stopped = true) }
       emit("recordStop", recordStopBundle(sessionId, reason, fileExist, fileSize))
     }
 
     override fun bleRecordPause(sessionId: Long, reason: Int, fileExist: Boolean, fileSize: Long) {
-      main.post { actions.recorded(sessionId) }
+      main.post { if (!destroyed) actions.recorded(sessionId) }
       emit("recordPause", recordStopBundle(sessionId, reason, fileExist, fileSize))
     }
 
     override fun bleRecordResume(
       sessionId: Long, start: Long, status: Int, scene: Int, startTime: Long
     ) {
-      if (status == 0) main.post { actions.recorded(sessionId) }
+      if (status == 0) main.post { if (!destroyed) actions.recorded(sessionId) }
       emit(
         "recordResume",
         bundleOf(
@@ -645,7 +651,7 @@ class PlaudSdkModule : Module() {
   private fun durationSeconds(fileSize: Long, channels: Int): Long =
     BleFile.calculateOpusDuration(fileSize, channels) / 1000
 
-  /** Null-safe on purpose: this runs from a permission callback, outside any promise guard. */
+  /** Called only inside guarded main-thread dispatch: permission can be revoked mid-call. */
   private fun isBluetoothOn(): Boolean {
     val manager =
       appContext.reactContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -675,17 +681,22 @@ class PlaudSdkModule : Module() {
     requestNativePermissions(blePermissions(), callback)
 
   private fun requestNativePermissions(required: Array<String>, callback: (Boolean) -> Unit) {
+    val delivered = AtomicBoolean(false)
+    fun deliver(granted: Boolean) {
+      if (delivered.compareAndSet(false, true)) callback(granted)
+    }
     val permissions = appContext.permissions
     if (permissions == null) {
-      callback(false)
+      deliver(false)
       return
     }
     if (permissions.hasGrantedPermissions(*required)) {
-      callback(true)
+      deliver(true)
       return
     }
     permissions.askForPermissions({ response ->
-      callback(response.values.all { it.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED })
+      // An empty or partial response must not be interpreted as permission granted.
+      deliver(required.all { response[it]?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED })
     }, *required)
   }
 
