@@ -18,7 +18,7 @@ export const accountDeletionRequest = {
   emailSubject: deletionEmailSubject,
   emailUrl: `mailto:${company.supportEmail}?subject=${encodeURIComponent(deletionEmailSubject)}`,
   paragraphs: [
-    'You can request deletion of your Aptly Able account and associated service data without installing or signing into the app. Email our monitored support address, info@aptlyable.com, with the subject “Aptly Able account deletion request”. Include your account email and any deletion reference you already have.',
+    'You can request deletion of your Aptly Able account and associated service data without installing or signing into the app. Email our support address, info@aptlyable.com, with the subject “Aptly Able account deletion request”. Include your account email and any deletion reference you already have.',
     'Aptly Able support verifies that you own the account before carrying out the request. Send the request from your account email when possible. If you cannot access that email, tell support so we can arrange identity verification. Never send your password or private recordings.',
     'We complete account deletion, including Plaud and backup cleanup, within 7 days of your request. Support can provide your request reference and status updates. Account deletion does not remotely erase your physical recorder or copies you exported.',
   ],
@@ -46,7 +46,7 @@ export const appDataNotice = {
       title: 'Audio, notes and transcripts on this phone',
       paragraphs: [
         'Your Plaud recorder captures the audio. This app does not record with the phone’s microphone. You can use your phone keyboard’s dictation feature to write notes.',
-        'Received audio uses a temporary cache that can be cleared to save space. Choose Keep offline in app to retain a copy. Your recording titles, notes and imported transcripts are stored with the local library. Copies kept in the app may be included in your device backups, depending on your device settings.',
+        'Received audio uses a temporary cache that can be cleared to save space. Choose Keep offline in app to retain a copy. Your recording titles, notes and imported transcripts are stored with the local library. Android app data is excluded from automatic cloud backup and device-to-device transfer. Export audio you want to keep elsewhere before removing the app or changing phones. On iPhone, copies kept in the app may be included in your device backups, depending on your device settings.',
         'Files you import are available on this device even when you sign out. Recorder downloads are shown for the account that received them. Removing the app removes its local library, but does not delete originals on your recorder, files saved elsewhere, or server copies.',
       ],
     },
