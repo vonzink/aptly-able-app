@@ -84,6 +84,7 @@ try {
     `Building ${developmentTeam ? 'development-signed' : 'unsigned'} iOS Release archive (${wifiTransferEnabled ? 'Wi-Fi + Bluetooth' : 'Bluetooth only'}); progress log: .local/remote-pilot/ios-build.log`,
   );
   await run('node', ['scripts/check-plaud-sdk.mjs', 'ios']);
+  await run('pnpm', ['--filter', '@aptly/product-content', 'build']);
   await run('pnpm', ['--filter', '@aptly/contracts', 'build']);
   await run('pnpm', ['--filter', '@aptly/api-client', 'build']);
   // Each archive gets an isolated output. Derived data stays ignored and reusable.

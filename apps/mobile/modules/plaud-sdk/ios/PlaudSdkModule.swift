@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import CoreBluetooth
 import PlaudDeviceBasicSDK
 import PlaudBleSDK
 
@@ -55,6 +56,17 @@ public class PlaudSdkModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PlaudSdk")
     Constant("wifiTransferEnabled") { PlaudWifiTransfer.enabled }
+
+    // A static authorization read does not create a CBCentralManager or prompt for access.
+    Function("getBluetoothPermissionStatus") { () -> String in
+      switch CBManager.authorization {
+      case .allowedAlways: return "granted"
+      case .denied: return "not-granted"
+      case .restricted: return "restricted"
+      case .notDetermined: return "not-determined"
+      @unknown default: return "unknown"
+      }
+    }
 
     Events(
       "scanResult", "scanTimeout", "connectState", "penState", "bind", "fileList",

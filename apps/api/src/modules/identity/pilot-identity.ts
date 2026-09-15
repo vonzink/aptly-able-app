@@ -75,7 +75,7 @@ export function createPilotIdentity(pool: pg.Pool): PilotIdentity {
       if (!parsed.success) throw new PilotAuthError();
       const input = parsed.data;
       const result = await pool.query<{ user_id: string; password_hash: string }>(
-        'SELECT user_id,password_hash FROM pilot_accounts WHERE email=$1',
+        'SELECT user_id,password_hash FROM pilot_accounts WHERE email=$1 AND NOT EXISTS (SELECT 1 FROM account_deletions WHERE user_id=pilot_accounts.user_id)',
         [input.email],
       );
       const account = result.rows[0];
@@ -87,7 +87,7 @@ export function createPilotIdentity(pool: pg.Pool): PilotIdentity {
       const hash = tokenHash(authorization);
       if (!hash) return undefined;
       const result = await pool.query<{ user_id: string }>(
-        `SELECT user_id FROM pilot_sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()`,
+        `SELECT user_id FROM pilot_sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND NOT EXISTS (SELECT 1 FROM account_deletions WHERE user_id=pilot_sessions.user_id)`,
         [hash],
       );
       const userId = result.rows[0]?.user_id;

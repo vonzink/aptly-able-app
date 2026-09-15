@@ -27,6 +27,19 @@ physical acceptance are separate questions, as noted below.
 
 ## Start here
 
+**September 15 follow-up:** The first stabilization step adds local Settings
+diagnostics and current-session email display, addressing part of items 2 and 17.
+See [the implementation and verification record](../verification/settings-diagnostics.md).
+This has not been distributed. Step 3 now implements session restoration locally
+(item 2 below); broader operational logging remains open. iOS native compilation
+and physical acceptance are still pending.
+
+**Step 4 follow-up:** Transfer interruption/retry cleanup is implemented locally,
+including durable-library deduplication, recording-activity race guards and
+explicit restart guidance for an unsettled native export. See
+[transfer recovery](../verification/transfer-recovery.md). Hardware acceptance
+and distribution remain pending.
+
 ### 1. Release the existing database-capacity fix
 
 **Status: deployed; targeted release checks passed. Physical concurrency acceptance remains open.**
@@ -53,39 +66,49 @@ pool mitigates starvation; durable vendor-operation reconciliation remains item 
 
 ### 2. Restore sign-in and make account identity visible
 
-**Status: partly addressed; session restoration remains open.**
+**Status: session restoration and account diagnostics implemented locally September 15;
+distribution, physical acceptance and account recovery remain open.**
 Sources: UX §2.1, §3 account/support, §5 account recovery.
 
-`apps/admin/src/App.tsx` stores the session in React state only.
-`apps/mobile/src/services/development-credentials.ts` stores the mobile token
-only in memory. The sidebar reload bug and signed-out library explanation are
-fixed; refreshing the website or restarting the app still loses authentication.
+`packages/api-client/src/session/` now owns saved-session validation, expiry,
+verification and sign-out. Native phones use SecureStore; the dashboard and
+mobile web preview use tab-scoped sessionStorage. Startup verifies the account
+before displaying its data and recovering its existing enrollment. Development
+credentials remain memory-only.
 
-- [ ] Add platform-appropriate session persistence, expiry handling and explicit
+- [x] Add platform-appropriate session persistence, expiry handling and explicit
   sign-out cleanup; preserve account isolation during restoration.
-- [ ] Add account email/name, sign-out, build number and support/troubleshooting
-  to `features/settings/SettingsScreen.tsx`. It currently displays the marketing
-  version but not the installed build number.
+- [x] Add account identity (email), sign-out, build number and support/troubleshooting
+  to Settings through `features/settings/SettingsDiagnostics.tsx`.
 - [ ] Add password recovery, or a defined support-assisted recovery process.
 - [ ] Make saved-enrollment recovery clear when the account or environment differs.
 
-The original test recorder was recovered individually on the server. That repair
-does not implement a general migration or returning-user recovery experience.
+See [step 3 implementation and verification](../verification/session-restoration.md).
+The original test recorder was recovered individually on the server. Automatic
+restoration of a valid saved enrollment does not add a general legacy-account or
+environment migration flow, password reset, or offline cold-start access.
 
 ### 3. Validate recorder model and serial together
 
-**Status: examples fixed; validation and correction remain open.**
+**Status: shared validation and form feedback implemented locally September 15;
+deployment, physical acceptance and correction of older assignments remain open.**
 Source: UX §2.2 and §7 form errors.
 
-`packages/contracts/src/enrollment.ts` accepts the general serial format;
-`plaud-device-controller.ts` additionally filters discovery by model prefix.
-`AssignmentForm.tsx` now shows matching examples but still permits incompatible
-model/serial combinations and reports a combined generic validation message.
+`packages/contracts/src/recorder-identity.ts` now owns the verified prefix rule:
+Note Pro uses `881`, NotePin S uses `882`. Registration on the dashboard and both
+API routes use it, and the phone validates its assigned identity before SDK
+initialization. Letters, case, and the existing full-serial format are preserved;
+discovery still requires the exact complete serial and a native device identifier.
 
-- [ ] Establish one verified compatibility rule for registration and discovery.
-- [ ] Add field-specific errors, serial-location help and first-error focus.
+- [x] Establish one verified compatibility rule for registration and discovery.
+- [x] Add field-specific errors, serial-location help and first-error focus.
 - [ ] Provide a correction flow that respects immutable assignments and existing
-  Plaud binding, rather than silently editing an assigned recorder's identity.
+      Plaud binding, rather than silently editing an assigned recorder's identity.
+
+See [step 2 implementation and verification](../verification/recorder-identity-validation.md).
+Existing assignments are not rewritten or released by this change. A mismatched
+saved assignment gets a dashboard/administrator recovery message before Bluetooth
+starts; the dedicated correction workflow is still a separate task.
 
 ### 4. Turn setup into one guided flow
 
@@ -187,7 +210,8 @@ native timeline, and bounded destructive-action dialogs are already implemented.
 
 ### 10. Finish native failure and cancellation handling
 
-**Status: partially implemented; failure ownership remains open.** Source: code §4.
+**Status: transfer recovery and explicit restart guidance improved locally;
+native cancellation ownership and physical acceptance remain open.** Source: code §4.
 
 Relevant files: `PlaudSdkModule.kt`, `PlaudRecorderActions.kt`,
 `PlaudSdkModule.swift`, native Wi-Fi helpers, and `plaud-sync-controller.ts`.
@@ -196,13 +220,19 @@ Relevant files: `PlaudSdkModule.kt`, `PlaudRecorderActions.kt`,
   including Kotlin scan start/stop callbacks.
 - [ ] Define terminal ownership for exports when callbacks are missing or late.
   Current safety locking can leave transfer blocked until restart.
-- [ ] Provide a verified native cancel/reset path or an explicit restart-required
-  state. A JavaScript timeout alone must not permit overlapping native writes.
+- [x] Provide an explicit restart-required state while a timed-out native export
+  remains unsettled, with consistent app/Wi-Fi/detail guidance. No verified native
+  cancel/reset path is added; a timeout never permits overlapping native writes.
 - [ ] Finish session-scoped scan-cache cleanup and remove unused Kotlin scanning
   state after checking vendor callback requirements.
 
 Several dispatch calls and export-directory failures already have guards. Do not
 redo those fixes or treat a successful compile as proof of cancellation behavior.
+Step 4 additionally blocks sync after failed library reads, reconciles committed
+imports before retry, deduplicates device-list entries, rejects transfers across
+recording-activity changes and releases waiting Load audio requests on interruption.
+Existing crash-orphaned SDK export files and already-duplicated library entries
+still need separate recovery policies.
 
 ### 11. Reconcile uncertain Plaud cloud operations
 

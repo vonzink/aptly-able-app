@@ -1,4 +1,4 @@
-import type { ApiClient } from '@aptly/api-client';
+import type { ApiClient, SessionController } from '@aptly/api-client';
 import type { EnrollmentPreview, SetupOperation } from '@aptly/contracts';
 
 export type EnrollmentJournal = { actorId: string; key: string; operationId?: string };
@@ -24,6 +24,8 @@ type Phase =
 export type EnrollmentSnapshot = {
   phase: Phase;
   actorId: string | null;
+  /** Display-only sign-in email; never persisted in the enrollment journal or diagnostics. */
+  accountEmail: string | null;
   preview: EnrollmentPreview | null;
   operation: SetupOperation | null;
   message: string | null;
@@ -33,7 +35,7 @@ type Dependencies = {
   client: ApiClient;
   journal: EnrollmentJournalStore;
   createIdempotencyKey: () => string;
-  credentials: { set(value: string): void; clear(): void };
+  authentication: SessionController;
 };
 
 export interface EnrollmentController {
@@ -43,7 +45,9 @@ export interface EnrollmentController {
   receiveInvitation(token: string): void;
   startNewInvitation(): Promise<void>;
   clearAfterUnpair(expected: { actorId: string; operationId: string }): Promise<void>;
-  signIn(accessCode: string): Promise<void>;
+  signIn(accessCode: string, accountEmail?: string, expiresAt?: string): Promise<void>;
+  restoreSession(): Promise<void>;
+  clearSession(message?: string | null): void;
   retryRecovery(): Promise<void>;
   resolveInvitation(): Promise<void>;
   claim(): Promise<void>;
@@ -54,6 +58,7 @@ export interface EnrollmentController {
 const initial: EnrollmentSnapshot = {
   phase: 'signed-out',
   actorId: null,
+  accountEmail: null,
   preview: null,
   operation: null,
   message: null,
@@ -69,6 +74,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
   let activeRequest: AbortController | null = null;
   let initializationPromise: Promise<void> | null = null;
   let lifecycleEpoch = 0;
+  let authenticationGeneration: number | null = null;
   const listeners = new Set<() => void>();
 
   const update = (next: Partial<EnrollmentSnapshot>) => {
@@ -112,6 +118,12 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
 
   function receiveInvitation(token: string) {
     if (token && token === invitation) return;
+    // A launch link can arrive while credentials are being restored. Retain it
+    // without cancelling authentication or exposing an unverified actor.
+    if (authenticationGeneration === generation) {
+      invitation = token || null;
+      return;
+    }
     const discardPendingClaim = snapshot.phase === 'claiming';
     generation += 1;
     cancelRequest();
@@ -211,10 +223,12 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
         return 'missing';
       }
       if (statusOf(error) === 401) {
-        deps.credentials.clear();
+        await deps.authentication.signOut();
+        if (!active(requestGeneration)) return 'failed';
         update({
           phase: 'signed-out',
           actorId: null,
+          accountEmail: null,
           message: 'Your local session expired. Sign in again to restore enrollment.',
         });
       } else {
@@ -227,17 +241,24 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     }
   }
 
-  async function signIn(accessCode: string) {
+  async function authenticate(work: () => Promise<void>) {
     const requestGeneration = ++generation;
-    await initialize();
-    if (!active(requestGeneration)) return;
-    deps.credentials.set(accessCode);
-    update({ phase: 'signing-in', message: null });
+    authenticationGeneration = requestGeneration;
+    cancelRequest();
+    update({ ...initial, phase: 'signing-in' });
     try {
-      const session = await deps.client.session({ signal: requestSignal() });
+      await initialize();
       if (!active(requestGeneration)) return;
-      const actorId = session.user.id;
-      update({ actorId });
+      await work();
+      if (!active(requestGeneration)) return;
+      const authentication = deps.authentication.getSnapshot();
+      const session = authentication.session;
+      if (!session) {
+        update({ ...initial, message: authentication.message });
+        return;
+      }
+      const actorId = session.identity.user.id;
+      update({ actorId, accountEmail: session.accountEmail });
       if (savedJournal && savedJournal.actorId !== actorId) {
         savedJournal = null;
         await writeJournal(() => deps.journal.clear());
@@ -246,22 +267,39 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
       if (savedJournal) {
         const recovery = await recoverJournal(requestGeneration);
         if (recovery === 'recovered' || recovery === 'failed') return;
-        update({
-          phase: invitation ? 'resolving' : 'needs-invitation',
-          message: invitation ? null : 'Please scan your invitation again.',
-        });
       }
       if (invitation) await resolveForGeneration(requestGeneration);
       else update({ phase: 'needs-invitation', message: 'Please scan or enter your invitation.' });
-    } catch (error) {
-      if (!active(requestGeneration)) return;
-      deps.credentials.clear();
-      update({
-        phase: 'signed-out',
-        actorId: null,
-        message: safeMessage(error, 'That access code could not be verified.'),
-      });
+    } catch {
+      if (active(requestGeneration))
+        update({
+          phase: 'storage-error',
+          message: 'Enrollment recovery is unavailable on this device. Try again.',
+        });
+    } finally {
+      if (authenticationGeneration === requestGeneration) authenticationGeneration = null;
     }
+  }
+
+  function signIn(accessCode: string, accountEmail?: string, expiresAt?: string) {
+    return authenticate(() =>
+      deps.authentication.signIn(accessCode, {
+        ...(accountEmail ? { accountEmail } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
+      }),
+    );
+  }
+
+  function restoreSession() {
+    return authenticate(deps.authentication.restore);
+  }
+
+  function clearSession(message: string | null = null) {
+    generation += 1;
+    cancelRequest();
+    claimPromise = null;
+    snapshot = { ...initial, message };
+    listeners.forEach((listener) => listener());
   }
 
   async function resolveForGeneration(requestGeneration: number) {
@@ -379,7 +417,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     invitation = null;
     savedJournal = null;
     claimPromise = null;
-    deps.credentials.clear();
+    const signingOut = deps.authentication.signOut();
     snapshot = initial;
     listeners.forEach((listener) => listener());
     try {
@@ -387,6 +425,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     } catch {
       /* local state is still wiped */
     }
+    await signingOut;
   }
 
   return {
@@ -400,6 +439,8 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     startNewInvitation,
     clearAfterUnpair,
     signIn,
+    restoreSession,
+    clearSession,
     retryRecovery,
     resolveInvitation,
     claim,

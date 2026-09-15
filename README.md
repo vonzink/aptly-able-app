@@ -116,4 +116,9 @@ Use `pnpm android:pilot` with an explicit `EXPO_PUBLIC_API_URL=https://api.plaud
 The temporary website is configured for `https://plaud.aptlyable.info`, with an API at `https://api.plaud.aptlyable.info`. The user will identify the existing Vaultwarden EC2 host; the API will be added separately after inspecting its current services. TestFlight requires Apple distribution setup; an unconfigured iOS download is shown as unavailable. Automatic server audio upload/transcription, AI summaries, cross-device storage, email verification/password reset and public-launch hardening remain separate work.
 
 See [the enrollment flow](docs/ENROLLMENT_FLOW.md), [architecture review](docs/ARCHITECTURE_READINESS_REVIEW.md), [enrollment UI verification](docs/verification/ENROLLMENT_UI.md), and [hardware acceptance test](aptly-able-app-handoff/docs/HARDWARE_TEST.md).
+
 # aptly-able-app
+
+## App Store readiness
+
+The `pilot` release channel preserves the current test workflow. `APTLY_RELEASE_CHANNEL=store` selects the narrower store feature surface and requires explicit production/native configuration. See [implementation status](docs/verification/app-store-readiness.md), [account-deletion operations](docs/verification/account-deletion.md), [iOS packaging](docs/verification/ios-store-packaging.md), [policy review](docs/APP_DATA_POLICY_REVIEW.md), and [reviewer preparation](docs/APP_STORE_REVIEW.md). Run `pnpm test:ios-store` for packaging fixture checks. Source readiness does not imply deployment, a signed distribution build or Apple approval.

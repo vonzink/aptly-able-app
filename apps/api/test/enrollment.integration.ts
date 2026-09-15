@@ -41,14 +41,21 @@ describe('enrollment persistence', () => {
     const applied = await pool.query<{ version: string; checksum: string }>(
       'SELECT version, checksum FROM schema_migrations ORDER BY version',
     );
-    expect(applied.rows).toHaveLength(4);
+    expect(applied.rows.map((row) => row.version)).toEqual([
+      '001_enrollment.sql',
+      '002_user_display_names.sql',
+      '003_processing_recordings.sql',
+      '004_pilot_accounts.sql',
+      '005_account_deletion.sql',
+      '006_account_deletion_deadline.sql',
+    ]);
     await pool.query('UPDATE schema_migrations SET checksum = $1 WHERE version = $2', [
       '0'.repeat(64),
       applied.rows[0]?.version,
     ]);
     await expect(migrate(pool)).rejects.toThrow(/checksum/i);
     const stillOne = await pool.query<{ count: string }>('SELECT count(*) FROM schema_migrations');
-    expect(stillOne.rows[0]?.count).toBe('4');
+    expect(stillOne.rows[0]?.count).toBe(String(applied.rows.length));
     await pool.query('UPDATE schema_migrations SET checksum = $1 WHERE version = $2', [
       applied.rows[0]?.checksum,
       applied.rows[0]?.version,
@@ -63,7 +70,7 @@ describe('enrollment persistence', () => {
 
   test('creates immutable assignments and enforces recorder conflicts and known users', async () => {
     const service = createEnrollmentService(pool);
-    const serial = `NP-${randomBytes(5).toString('hex')}-1234`;
+    const serial = `881-${randomBytes(5).toString('hex')}-1234`;
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
       serial,
@@ -75,11 +82,11 @@ describe('enrollment persistence', () => {
     ).rejects.toMatchObject({ code: 'ASSIGNMENT_CONFLICT', statusCode: 409 });
     await expect(
       service.createAssignment(admin, { userId: user.userId, serial, model: 'notepins' }),
-    ).rejects.toMatchObject({ code: 'ASSIGNMENT_CONFLICT', statusCode: 409 });
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT', statusCode: 400 });
     await expect(
       service.createAssignment(admin, {
         userId: randomUUID(),
-        serial: `NP-${randomBytes(5).toString('hex')}-5678`,
+        serial: `881-${randomBytes(5).toString('hex')}-5678`,
         model: 'notepro',
       }),
     ).rejects.toMatchObject({ code: 'USER_NOT_FOUND', statusCode: 404 });
@@ -93,7 +100,7 @@ describe('enrollment persistence', () => {
 
   test('stores only token hashes, returns suffix-only previews, and hides unavailable reasons', async () => {
     const service = createEnrollmentService(pool);
-    const serial = `NP-${randomBytes(5).toString('hex')}-4812`;
+    const serial = `881-${randomBytes(5).toString('hex')}-4812`;
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
       serial,
@@ -127,7 +134,7 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-2201`,
+      serial: `881-${randomBytes(5).toString('hex')}-2201`,
       model: 'notepro',
     });
     const invitation = await service.issueToken(admin, assignment.id, 600);
@@ -159,7 +166,7 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-2202`,
+      serial: `881-${randomBytes(5).toString('hex')}-2202`,
       model: 'notepro',
     });
     const invitation = await service.issueToken(admin, assignment.id, 600);
@@ -176,12 +183,12 @@ describe('enrollment persistence', () => {
     const assignments = await Promise.all([
       service.createAssignment(admin, {
         userId: user.userId,
-        serial: `NP-${randomBytes(5).toString('hex')}-2251`,
+        serial: `881-${randomBytes(5).toString('hex')}-2251`,
         model: 'notepro',
       }),
       service.createAssignment(admin, {
         userId: user.userId,
-        serial: `NP-${randomBytes(5).toString('hex')}-2252`,
+        serial: `881-${randomBytes(5).toString('hex')}-2252`,
         model: 'notepro',
       }),
     ]);
@@ -206,7 +213,7 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-2261`,
+      serial: `881-${randomBytes(5).toString('hex')}-2261`,
       model: 'notepro',
     });
     const token = await service.issueToken(admin, assignment.id, 600);
@@ -229,12 +236,12 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const first = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-3301`,
+      serial: `881-${randomBytes(5).toString('hex')}-3301`,
       model: 'notepro',
     });
     const second = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-3302`,
+      serial: `881-${randomBytes(5).toString('hex')}-3302`,
       model: 'notepro',
     });
     const tokenOne = await service.issueToken(admin, first.id, 600);
@@ -262,7 +269,7 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-3355`,
+      serial: `881-${randomBytes(5).toString('hex')}-3355`,
       model: 'notepro',
     });
     await expect(
@@ -278,7 +285,7 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-4401`,
+      serial: `881-${randomBytes(5).toString('hex')}-4401`,
       model: 'notepro',
     });
     const oldToken = await service.issueToken(admin, assignment.id, 600);
@@ -305,7 +312,7 @@ describe('enrollment persistence', () => {
     const service = createEnrollmentService(pool);
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
-      serial: `NP-${randomBytes(5).toString('hex')}-5501`,
+      serial: `881-${randomBytes(5).toString('hex')}-5501`,
       model: 'notepro',
     });
     const invitation = await service.issueToken(admin, assignment.id, 600);
@@ -320,7 +327,7 @@ describe('enrollment persistence', () => {
 
   test('ending an assignment revokes tokens and operations and permits explicit reassignment', async () => {
     const service = createEnrollmentService(pool);
-    const serial = `NP-${randomBytes(5).toString('hex')}-6601`;
+    const serial = `881-${randomBytes(5).toString('hex')}-6601`;
     const assignment = await service.createAssignment(admin, {
       userId: user.userId,
       serial,
@@ -355,7 +362,7 @@ describe('enrollment persistence', () => {
     await expect(
       service.createAssignment(user, {
         userId: user.userId,
-        serial: `NP-${randomBytes(5).toString('hex')}-7701`,
+        serial: `881-${randomBytes(5).toString('hex')}-7701`,
         model: 'notepro',
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });

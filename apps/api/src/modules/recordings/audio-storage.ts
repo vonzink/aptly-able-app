@@ -13,7 +13,7 @@ export function createAudioStorage(directory: string) {
   };
   return {
     path,
-    async save(source: Readable, expectedBytes: number) {
+    async save(source: Readable, expectedBytes: number, reservedKey?: string) {
       if (
         !Number.isSafeInteger(expectedBytes) ||
         expectedBytes <= 0 ||
@@ -21,7 +21,7 @@ export function createAudioStorage(directory: string) {
       )
         throw new RecordingError(400, 'INVALID_AUDIO', 'Choose audio no larger than 250 MB.');
       await mkdir(root, { recursive: true, mode: 0o700 });
-      const key = `${randomUUID()}.audio`;
+      const key = reservedKey ?? `${randomUUID()}.audio`;
       const pending = path(key) + '.pending';
       const hash = createHash('sha256');
       const destination = await open(pending, 'wx', 0o600);
@@ -60,6 +60,7 @@ export function createAudioStorage(directory: string) {
     },
     async remove(key: string) {
       await rm(path(key), { force: true });
+      await rm(path(key) + '.pending', { force: true });
     },
   };
 }

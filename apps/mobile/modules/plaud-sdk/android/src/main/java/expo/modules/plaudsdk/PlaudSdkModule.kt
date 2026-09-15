@@ -173,6 +173,14 @@ class PlaudSdkModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PlaudSdk")
 
+    // Match the existing scan permission set without asking for access or starting the SDK.
+    Function("getBluetoothPermissionStatus") {
+      val permissions = appContext.permissions
+      if (permissions == null) "unknown"
+      else if (permissions.hasGrantedPermissions(*blePermissions())) "granted"
+      else "not-granted"
+    }
+
     Events(
       "scanResult", "scanTimeout", "connectState", "penState", "bind", "fileList",
       "exportProgress", "recordStart", "recordStop", "recordPause", "recordResume", "depair",

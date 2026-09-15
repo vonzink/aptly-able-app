@@ -1,7 +1,7 @@
 import { z } from 'zod';
+import { recorderIdentitySchema, recorderModelSchema } from './recorder-identity.js';
 
 export const enrollmentTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-export const recorderModelSchema = z.enum(['notepro', 'notepins']);
 export const assignmentStatusSchema = z.enum(['active', 'released', 'revoked']);
 export const assignmentSchema = z.strictObject({
   id: z.uuid(),
@@ -11,13 +11,8 @@ export const assignmentSchema = z.strictObject({
   status: assignmentStatusSchema,
 });
 export type RecorderAssignment = z.infer<typeof assignmentSchema>;
-export const createAssignmentRequestSchema = z.strictObject({
-  userId: z.uuid(),
-  serial: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z0-9-]{2,60}[0-9]{4}$/),
-  model: recorderModelSchema,
+export const createAssignmentRequestSchema = recorderIdentitySchema.safeExtend({
+  userId: z.uuid({ error: 'Choose a person for this recorder.' }),
 });
 export type CreateAssignmentInput = z.infer<typeof createAssignmentRequestSchema>;
 export const enrollmentPlatformSchema = z.enum(['android', 'ios']);

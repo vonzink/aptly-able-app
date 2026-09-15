@@ -1,3 +1,8 @@
+import {
+  AccountDeletionError,
+  type AccountDeletionService,
+} from '../../modules/account-deletion/service.js';
+import { registerAccountRoutes } from './account-routes.js';
 import type { PilotIdentity } from '../../modules/identity/pilot-identity.js';
 import { registerAuthRoutes } from './auth-routes.js';
 import { PlaudDeviceError } from '../../modules/plaud-devices/errors.js';
@@ -21,6 +26,7 @@ import { registerBrowserAccess } from './browser-access.js';
 type AppDependencies = {
   config: ApiConfig;
   pilotIdentity?: PilotIdentity;
+  accountDeletion?: AccountDeletionService;
   probeDatabase: () => Promise<void>;
   logger?: boolean;
   enrollments?: EnrollmentService;
@@ -32,6 +38,7 @@ type AppDependencies = {
 export function buildApp({
   config,
   pilotIdentity,
+  accountDeletion,
   probeDatabase,
   logger = false,
   enrollments,
@@ -59,6 +66,7 @@ export function buildApp({
       return development.verify(authorization) ?? (await pilot?.verify(authorization));
     },
   };
+  registerAccountRoutes(app, accountDeletion);
   registerAuthRoutes(app, pilot, !!config.developmentIdentity || !!config.developmentAdminIdentity);
   app.addHook('onRequest', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -67,6 +75,7 @@ export function buildApp({
   registerBrowserAccess(app, config.browserOrigins);
   app.setErrorHandler((error, request, reply) => {
     if (
+      error instanceof AccountDeletionError ||
       error instanceof HttpError ||
       error instanceof EnrollmentError ||
       error instanceof RecordingError ||

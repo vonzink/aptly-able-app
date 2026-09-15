@@ -17,6 +17,13 @@ import { durationLabel } from '../recordings/presentation';
 import { LocalAccessCard } from '../session/LocalAccessCard';
 import { createTranscriptionController, isProcessing } from './transcription-controller';
 import { recordingServer } from '../../services/recording-server';
+import { isStoreRelease } from '../../services/release-profile';
+import { ConfirmationDialog } from '../../ui/ConfirmationDialog';
+import {
+  canBeginConsentedUpload,
+  createUploadConsentRequest,
+  type UploadConsentRequest,
+} from './generation-consent';
 
 const statusLabels: Record<ProcessingStatus, string> = {
   awaiting_upload: 'Ready to upload your saved audio.',
@@ -36,6 +43,9 @@ type GenerationPanelProps = {
 };
 
 export function GenerationPanel(props: GenerationPanelProps) {
+  // Cloud generation stays outside the first store release until its full
+  // upload, retention, and deletion path is verified as a release feature.
+  if (isStoreRelease) return null;
   const { colors } = useTheme();
   if (props.recording.source)
     return (
@@ -83,6 +93,10 @@ function ManualGenerationPanel({ recording, currentTime, onSeek }: GenerationPan
     controller.getSnapshot,
   );
   const [confirmRetry, setConfirmRetry] = useState(false);
+  const [uploadConsent, setUploadConsent] = useState<{
+    request: UploadConsentRequest;
+    action: 'generate' | 'retry' | 'duplicate-retry';
+  } | null>(null);
   const [viewSaved, setViewSaved] = useState(false);
   useFocusEffect(
     useCallback(() => {
@@ -91,7 +105,29 @@ function ManualGenerationPanel({ recording, currentTime, onSeek }: GenerationPan
     }, [controller, session.actorId]),
   );
   const serverRecord = state.actorId === session.actorId ? state.record : null;
-  useEffect(() => setConfirmRetry(false), [session.actorId, serverRecord?.status]);
+  useEffect(() => {
+    setConfirmRetry(false);
+    setUploadConsent(null);
+  }, [id, session.actorId, serverRecord?.status]);
+  const requestUploadConsent = (action: 'generate' | 'retry' | 'duplicate-retry') => {
+    if (!session.actorId) return;
+    setUploadConsent({
+      request: createUploadConsentRequest({ actorId: session.actorId, recordingId: id }),
+      action,
+    });
+  };
+  const confirmUpload = () => {
+    const pending = uploadConsent;
+    setUploadConsent(null);
+    const currentActorId = enrollment.getSnapshot().actorId;
+    if (
+      !pending ||
+      !canBeginConsentedUpload(pending.request, { actorId: currentActorId, recordingId: id })
+    )
+      return;
+    if (pending.action === 'generate') void controller.generate();
+    else void controller.retry(pending.action === 'duplicate-retry');
+  };
   const capabilities = state.capabilities;
   const processing = isProcessing(serverRecord?.status);
   const canGenerate = !serverRecord || serverRecord.status === 'awaiting_upload';
@@ -162,25 +198,31 @@ function ManualGenerationPanel({ recording, currentTime, onSeek }: GenerationPan
             </Text>
           ) : null}
           {serverRecord.transcript ? (
-            <GeneratedTranscriptText
-              transcript={serverRecord.transcript}
-              currentTime={currentTime}
-              onSeek={onSeek}
-            />
+            <>
+              <Text style={[styles.copy, { color: colors.inkSecondary }]}>
+                AI transcripts can contain mistakes. Check names, numbers and speaker labels against
+                the audio.
+              </Text>
+              <GeneratedTranscriptText
+                transcript={serverRecord.transcript}
+                currentTime={currentTime}
+                onSeek={onSeek}
+              />
+            </>
           ) : null}
         </>
       ) : null}
       {capabilities?.available && session.actorId && canGenerate ? (
         <>
           <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-            Upload your saved audio to generate a transcript. The uploaded audio and generated
-            transcript are kept on the server.
+            Manual cloud transcription sends this recording to Aptly Able and Plaud. Review and
+            approve the disclosure before each upload.
           </Text>
           <Button
             label={serverRecord ? 'Upload audio and generate transcript' : 'Generate transcript'}
             loading={!!state.busy}
             onPress={() => {
-              void controller.generate();
+              requestUploadConsent('generate');
             }}
           />
           {state.busy === 'uploading' ? (
@@ -195,7 +237,7 @@ function ManualGenerationPanel({ recording, currentTime, onSeek }: GenerationPan
           label="Retry transcription"
           loading={!!state.busy}
           onPress={() => {
-            void controller.retry(false);
+            requestUploadConsent('retry');
           }}
         />
       ) : null}
@@ -211,7 +253,7 @@ function ManualGenerationPanel({ recording, currentTime, onSeek }: GenerationPan
               loading={!!state.busy}
               onPress={() => {
                 setConfirmRetry(false);
-                void controller.retry(true);
+                requestUploadConsent('duplicate-retry');
               }}
             />
             <Button
@@ -253,6 +295,23 @@ function ManualGenerationPanel({ recording, currentTime, onSeek }: GenerationPan
           }}
         />
       ) : null}
+      <ConfirmationDialog
+        visible={uploadConsent !== null}
+        title="Send audio for transcription?"
+        description="If you continue, Aptly Able uploads this recording to its server and sends it to Plaud for AI transcription and speaker labeling. Audio, job data, and the generated transcript may remain with Aptly Able and Plaud until their deletion processes remove them. Review retention and deletion details under Privacy & your recordings in Settings. Declining keeps your local audio available in Aptly Able."
+        confirmLabel="Agree and send audio"
+        cancelLabel="Keep audio on this phone"
+        loading={!!state.busy}
+        onConfirm={confirmUpload}
+        onCancel={() => setUploadConsent(null)}
+      >
+        {uploadConsent?.action === 'duplicate-retry' ? (
+          <Text style={[styles.copy, { color: colors.inkSecondary }]}>
+            Plaud may already be processing the earlier request. Continuing may create a duplicate
+            transcript and use additional credit.
+          </Text>
+        ) : null}
+      </ConfirmationDialog>
     </Card>
   );
 }

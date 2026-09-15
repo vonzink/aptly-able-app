@@ -12,7 +12,7 @@ export function LocalAccessCard({
 }: {
   loading: boolean;
   message: string | null;
-  onSubmit(code: string): void;
+  onSubmit(code: string, accountEmail?: string, expiresAt?: string): void;
 }) {
   const { colors } = useTheme();
   const [code, setCode] = useState('');

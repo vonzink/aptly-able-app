@@ -39,8 +39,8 @@ export default function HomeScreen() {
           Bring your conversations with you
         </Text>
         <Text style={[local.heroCopy, { color: colors.inkSecondary }]}>
-          Receive audio directly from your paired Plaud and listen back whenever you need it. Your
-          recordings are saved on this phone.
+          Receive audio directly from your paired Plaud into your library. Choose Keep offline in
+          app to retain audio on this phone; temporary copies can be cleared to save space.
         </Text>
         <Button label="Open recordings" onPress={() => router.push('/recordings')} />
       </Card>

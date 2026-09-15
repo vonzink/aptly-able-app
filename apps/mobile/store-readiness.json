@@ -1,0 +1,13 @@
+{
+  "legalName": "Aptly Able, LLC",
+  "supportEmail": "info@aptlyable.com",
+  "privacyPolicyUrl": "https://www.aptlyable.com/privacy",
+  "supportUrl": "https://www.aptlyable.com/contact",
+  "privacyPolicyReviewed": false,
+  "providerPrivacyReviewed": false,
+  "providerErasureVerified": false,
+  "backupRetentionReviewed": false,
+  "hardwareReviewVerified": false,
+  "providerEvidencePath": "",
+  "accountDeletionMaxDays": 7
+}

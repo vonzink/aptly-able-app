@@ -176,3 +176,18 @@ export function createApiClient({
 export { createPlaudDeviceClient, type PlaudDeviceClient } from './plaud-device.js';
 
 export { createAuthClient, type AuthClient } from './auth.js';
+
+export {
+  createSessionController,
+  type SessionController,
+  type SessionSnapshot,
+  type SignInDetails,
+} from './session/controller.js';
+export {
+  createSessionStore,
+  createBrowserSessionStore,
+  type SessionStore,
+  type SessionStorageDriver,
+} from './session/store.js';
+
+export * from './account.js';

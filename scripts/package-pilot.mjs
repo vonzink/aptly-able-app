@@ -120,7 +120,12 @@ try {
     VITE_ANDROID_DOWNLOAD_URL: `${origin}/downloads/aptly-able-android.apk`,
     VITE_IOS_TESTFLIGHT_URL: process.env.VITE_IOS_TESTFLIGHT_URL ?? '',
   };
-  for (const name of ['@aptly/contracts', '@aptly/api-client', '@aptly/admin']) {
+  for (const name of [
+    '@aptly/product-content',
+    '@aptly/contracts',
+    '@aptly/api-client',
+    '@aptly/admin',
+  ]) {
     const build = spawnSync('pnpm', ['--filter', name, 'build'], {
       cwd: root,
       env: buildEnvironment,

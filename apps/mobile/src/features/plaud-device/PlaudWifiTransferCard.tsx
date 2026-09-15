@@ -4,14 +4,18 @@ import { Button, Card, SectionLabel } from '../../ui/components';
 import { fontFamily, useTheme } from '../../ui/theme';
 import { usePlaudSync } from './PlaudSyncProvider';
 import type { PlaudSyncSnapshot } from './plaud-sync-model';
+import { transferRecovery } from './transfer-recovery';
 
 function transferMessage(snapshot: PlaudSyncSnapshot): string | null {
+  const recovery = transferRecovery(snapshot);
+  if (recovery?.action === 'restart-app') return recovery.message;
   if (snapshot.wifiQueued) return 'Wi-Fi will start after the current operation finishes.';
   if (snapshot.cancelling)
     return 'Stopping transfer. Reopen the app if the recorder does not release the file.';
   if (snapshot.transport !== 'wifi') return null;
   if (snapshot.message) return snapshot.message;
   if (snapshot.busy) {
+    if (snapshot.phase === 'saving') return 'Saving the recording on this phone…';
     if (snapshot.phase === 'connecting-wifi') return 'Connecting to your recorder’s Wi-Fi…';
     if (snapshot.phase === 'syncing') {
       const current = Math.min(snapshot.completed + 1, snapshot.total);
@@ -52,7 +56,7 @@ export function PlaudWifiTransferCard() {
           {status}
         </Text>
       ) : null}
-      {active || wifiQueued ? (
+      {snapshot.restartRequired ? null : active || wifiQueued ? (
         <Button
           label={
             cancelling

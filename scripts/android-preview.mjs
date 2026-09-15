@@ -63,6 +63,7 @@ try {
         .split(/\r?\n/)[0]
         .trim();
     }
+    await run('pnpm', ['--filter', '@aptly/product-content', 'build']);
     await run('pnpm', ['--filter', '@aptly/contracts', 'build']);
     await run('pnpm', ['--filter', '@aptly/api-client', 'build']);
     await run(

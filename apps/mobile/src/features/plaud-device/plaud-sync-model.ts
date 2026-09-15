@@ -2,8 +2,15 @@ import type { PlaudRecorderCommand } from './plaud-file-port';
 
 export interface PlaudSyncSnapshot {
   phase:
-    | 'unavailable' | 'waiting' | 'checking' | 'connecting-wifi'
-    | 'syncing' | 'recording' | 'idle' | 'error';
+    | 'unavailable'
+    | 'waiting'
+    | 'checking'
+    | 'connecting-wifi'
+    | 'syncing'
+    | 'saving'
+    | 'recording'
+    | 'idle'
+    | 'error';
   progress: number | null;
   message: string | null;
   activity: 'unknown' | 'idle' | 'recording' | 'paused';
@@ -17,5 +24,6 @@ export interface PlaudSyncSnapshot {
   cancelling: boolean;
   busy: boolean;
   wifiQueued: boolean;
+  /** Native export has not settled; starting another export is unsafe. */
+  restartRequired: boolean;
 }
-

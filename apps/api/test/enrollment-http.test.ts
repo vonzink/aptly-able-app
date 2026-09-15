@@ -69,6 +69,41 @@ afterEach(async () => {
 });
 
 describe('enrollment HTTP boundaries', () => {
+  it.each(['/v1/admin', '/v1/workspace'])(
+    'rejects model/serial mismatches at %s before assignment creation',
+    async (prefix) => {
+      const { app, service } = fixture();
+      const response = await app.inject({
+        method: 'POST',
+        url: `${prefix}/recorder-assignments`,
+        headers: adminHeaders,
+        payload: { userId, serial: '882B123456785641', model: 'notepro' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('INVALID_REQUEST');
+      expect(service.createAssignment).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['/v1/admin', '/v1/workspace'])(
+    'preserves a valid alphanumeric serial at %s',
+    async (prefix) => {
+      const { app, service } = fixture();
+      const payload = { userId, serial: '882B123456785641', model: 'notepins' };
+      const response = await app.inject({
+        method: 'POST',
+        url: `${prefix}/recorder-assignments`,
+        headers: adminHeaders,
+        payload: { ...payload, serial: ` ${payload.serial} ` },
+      });
+      expect(response.statusCode).toBe(201);
+      expect(service.createAssignment).toHaveBeenCalledWith(
+        { userId: adminId, role: 'admin' },
+        payload,
+      );
+    },
+  );
+
   it('rejects unauthenticated and user-role administrative calls before state changes', async () => {
     const { app, service } = fixture();
     for (const [url, payload] of [

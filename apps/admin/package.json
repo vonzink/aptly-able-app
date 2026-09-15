@@ -12,7 +12,8 @@
     "@aptly/api-client": "workspace:*",
     "@aptly/contracts": "workspace:*",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "@aptly/product-content": "workspace:*"
   },
   "devDependencies": {
     "vite": "8.2.2",

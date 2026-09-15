@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type { Readable } from 'node:stream';
 import { registerRecordingSchema, type RegisterRecordingInput } from '@aptly/contracts';
@@ -5,7 +6,7 @@ import type { AudioStorage } from './audio-storage.js';
 import { RecordingError } from './errors.js';
 import { ownedRecording, presentRecording } from './repository.js';
 
-export function createProcessingService(pool: pg.Pool, storage: AudioStorage) {
+function processingService(pool: pg.Pool, storage: AudioStorage) {
   return {
     async register(userId: string, input: RegisterRecordingInput) {
       const value = registerRecordingSchema.parse(input);
@@ -34,7 +35,12 @@ export function createProcessingService(pool: pg.Pool, storage: AudioStorage) {
     },
     async upload(userId: string, id: string, source: Readable) {
       const initial = await ownedRecording(pool, userId, id);
-      const saved = await storage.save(source, Number(initial.size_bytes));
+      const reservedKey = `${randomUUID()}.audio`;
+      await pool.query('INSERT INTO account_audio_uploads(audio_key,user_id) VALUES ($1,$2)', [
+        reservedKey,
+        userId,
+      ]);
+      const saved = await storage.save(source, Number(initial.size_bytes), reservedKey);
       let retained = false;
       let commitStarted = false;
       let client: pg.PoolClient | undefined;
@@ -119,3 +125,50 @@ export function createProcessingService(pool: pg.Pool, storage: AudioStorage) {
   };
 }
 export type ProcessingService = ReturnType<typeof createProcessingService>;
+
+export function createProcessingService(
+  pool: pg.Pool,
+  storage: AudioStorage,
+  uploadPool: pg.Pool = pool,
+) {
+  async function run<T>(
+    userId: string,
+    work: (service: ReturnType<typeof processingService>) => Promise<T>,
+    connectionPool = pool,
+  ): Promise<T> {
+    const client = await connectionPool.connect();
+    let locked = false;
+    try {
+      await client.query('SELECT pg_advisory_lock_shared(hashtextextended($1,418))', [userId]);
+      locked = true;
+      if (
+        (await client.query('SELECT 1 FROM account_deletions WHERE user_id=$1', [userId])).rowCount
+      )
+        throw new RecordingError(401, 'UNAUTHORIZED', 'This account is unavailable.');
+      // Reuse this connection for all inner transactions; no pool starvation during uploads.
+      const scoped = {
+        query: client.query.bind(client),
+        connect: async () => ({ query: client.query.bind(client), release() {} }),
+      } as unknown as pg.Pool;
+      return await work(processingService(scoped, storage));
+    } finally {
+      try {
+        if (locked)
+          await client.query('SELECT pg_advisory_unlock_shared(hashtextextended($1,418))', [
+            userId,
+          ]);
+      } finally {
+        client.release();
+      }
+    }
+  }
+  return {
+    register: (userId: string, input: RegisterRecordingInput) =>
+      run(userId, (service) => service.register(userId, input)),
+    get: (userId: string, id: string) => run(userId, (service) => service.get(userId, id)),
+    upload: (userId: string, id: string, source: Readable) =>
+      run(userId, (service) => service.upload(userId, id, source), uploadPool),
+    retry: (userId: string, id: string, acknowledgeDuplicateRisk: boolean) =>
+      run(userId, (service) => service.retry(userId, id, acknowledgeDuplicateRisk)),
+  };
+}

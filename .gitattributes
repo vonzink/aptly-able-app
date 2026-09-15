@@ -1,0 +1,2 @@
+# Generated dependency patches use a leading space for blank context lines.
+patches/*.patch -whitespace

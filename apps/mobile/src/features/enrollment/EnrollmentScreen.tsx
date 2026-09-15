@@ -89,7 +89,7 @@ export default function EnrollmentScreen() {
           <LocalAccessCard
             loading={state.phase === 'signing-in'}
             message={state.message}
-            onSubmit={(code) => void controller.signIn(code)}
+            onSubmit={(code, email, expiresAt) => void controller.signIn(code, email, expiresAt)}
           />
         </>
       ) : null}

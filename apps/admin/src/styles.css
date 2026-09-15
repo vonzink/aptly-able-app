@@ -715,6 +715,20 @@ dd {
   grid-template-columns: 1fr 1fr 1.2fr;
   gap: 17px;
 }
+.assignment-form :is(input, select)[aria-invalid='true'] {
+  border-color: #92321f;
+}
+.assignment-form :is(.field-help, .field-error) {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.assignment-form .field-help {
+  color: var(--muted);
+}
+.assignment-form .field-error {
+  color: #92321f;
+}
 .form-footer {
   display: flex;
   justify-content: space-between;

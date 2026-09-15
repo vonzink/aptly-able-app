@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ApiError, createAuthClient } from '@aptly/api-client';
+import { ApiError, createAuthClient, type SignInDetails } from '@aptly/api-client';
 import type { SessionResponse } from '@aptly/contracts';
 import { AccessScreen } from './AccessScreen';
+import { company } from '@aptly/product-content';
+import '../legal/legal.css';
 
 export function AccountAccess({
   baseUrl,
   onAccess,
+  message,
 }: {
   baseUrl: string;
-  onAccess(credential: string, session: SessionResponse): void;
+  onAccess(credential: string, session: SessionResponse, details?: SignInDetails): Promise<void>;
+  message?: string | null;
 }) {
   const auth = useMemo(() => createAuthClient({ baseUrl }), [baseUrl]);
   const [config, setConfig] = useState<{
@@ -55,7 +59,10 @@ export function AccountAccess({
           : await auth.login({ email, password }, { signal: controller.signal });
       if (!controller.signal.aborted) {
         setPassword('');
-        onAccess(result.credential, result.session);
+        await onAccess(result.credential, result.session, {
+          expiresAt: result.expiresAt,
+          accountEmail: email,
+        });
       }
     } catch (failure) {
       if (!controller.signal.aborted)
@@ -70,7 +77,7 @@ export function AccountAccess({
       <AccessScreen
         baseUrl={baseUrl}
         onAccess={(credential, id) =>
-          onAccess(credential, { user: { id, role: 'admin' }, mode: 'development' })
+          void onAccess(credential, { user: { id, role: 'admin' }, mode: 'development' })
         }
       />
     );
@@ -158,9 +165,9 @@ export function AccountAccess({
                   </p>
                 )}
               </div>
-              {error && (
+              {(error || message) && (
                 <div role="alert" className="error">
-                  {error}
+                  {error ?? message}
                 </div>
               )}
               <button className="primary" disabled={busy}>
@@ -187,6 +194,11 @@ export function AccountAccess({
               Local administrator access
             </button>
           )}
+          <nav className="account-legal-links" aria-label="Privacy and support">
+            <a href="/privacy">Privacy</a>
+            <a href={company.termsUrl}>Terms</a>
+            <a href="/support">Help & support</a>
+          </nav>
         </div>
       </section>
     </main>

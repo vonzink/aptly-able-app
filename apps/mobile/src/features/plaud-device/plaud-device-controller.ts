@@ -1,5 +1,5 @@
 import { ApiError, type PlaudDeviceClient } from '@aptly/api-client';
-import type { PlaudDeviceSession } from '@aptly/contracts';
+import { recorderIdentitySchema, type PlaudDeviceSession } from '@aptly/contracts';
 
 import type { PlaudNativePort, PlaudNearbyDevice } from './plaud-native-port';
 import { disconnectPlaudTransport } from './disconnect-plaud-transport';
@@ -231,12 +231,8 @@ export function createPlaudDeviceController({
       native.addListener('scanResult', ({ devices }) => {
         if (!isCurrent() || snapshot.phase !== 'scanning' || !snapshot.assignment) return;
         const assignment = snapshot.assignment;
-        const prefix = assignment.model === 'notepins' ? '882' : '881';
         const found = devices.find(
-          (device) =>
-            device.uuid.length > 0 &&
-            device.serialNumber === assignment.serial &&
-            device.serialNumber.startsWith(prefix),
+          (device) => device.uuid.length > 0 && device.serialNumber === assignment.serial,
         );
         if (found) scanned?.resolve({ ...found });
       }),
@@ -345,15 +341,17 @@ export function createPlaudDeviceController({
         requestMs,
         'Your recorder session could not be prepared. Check your connection and try again.',
       );
-      if (
-        session.userId !== enrollment?.actorId ||
-        !['notepro', 'notepins'].includes(session.recorder.model) ||
-        Date.parse(session.expiresAt) <= Date.now()
-      )
+      if (session.userId !== enrollment?.actorId || Date.parse(session.expiresAt) <= Date.now())
         throw new DeviceFailure(
           'Your recorder session is no longer valid. Sign in again and retry.',
         );
-      publish({ assignment: { ...session.recorder } });
+      const recorder = recorderIdentitySchema.safeParse(session.recorder);
+      if (!recorder.success)
+        throw new DeviceFailure(
+          'The assigned recorder’s model and serial do not match a supported device. Check the recorder details in the dashboard or ask your administrator to correct the assignment before trying again.',
+        );
+      // Discovery must still match the entire serial exactly, including letter case.
+      publish({ assignment: recorder.data });
       sessionExpiresAt = Date.parse(session.expiresAt);
       nativeStarted = true;
       await wait(

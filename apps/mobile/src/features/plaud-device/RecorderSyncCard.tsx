@@ -5,6 +5,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { Button, Card } from '../../ui/components';
 import { fontFamily, useTheme } from '../../ui/theme';
 import { usePlaudSync } from './PlaudSyncProvider';
+import { transferRecovery } from './transfer-recovery';
 
 export function RecorderSyncCard() {
   const { controller, snapshot } = usePlaudSync();
@@ -37,8 +38,11 @@ export function RecorderSyncCard() {
     );
   }
   const busy = snapshot.busy;
+  const recovery = transferRecovery(snapshot);
+  const restartRequired = recovery?.action === 'restart-app';
   const needsConnection = snapshot.phase === 'waiting' || snapshot.phase === 'unavailable';
   const message =
+    recovery?.message ??
     snapshot.message ??
     {
       unavailable: 'Open Aptly Able on your phone to receive audio from your recorder.',
@@ -47,6 +51,7 @@ export function RecorderSyncCard() {
       'connecting-wifi':
         'Connecting to your recorder’s Wi-Fi. Allow the phone’s connection prompt…',
       syncing: `Receiving over ${snapshot.transport === 'wifi' ? 'Wi-Fi' : 'Bluetooth'}${snapshot.progress === null ? '' : ` · ${Math.round(snapshot.progress)}%`}…`,
+      saving: 'Saving the recording on this phone…',
       recording: 'Your recorder is recording or paused. Audio will transfer after you stop.',
       idle: 'Your recorder is connected. New recordings sync automatically while the app is open.',
       error: 'Recording transfer needs attention. Keep your recorder nearby and try again.',
@@ -54,10 +59,14 @@ export function RecorderSyncCard() {
   return (
     <Card style={{ gap: 8, padding: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        {busy ? (
+        {busy && !restartRequired ? (
           <ActivityIndicator color={colors.accent} />
         ) : (
-          <Ionicons name="radio-outline" size={24} color={colors.accent} />
+          <Ionicons
+            name={recovery ? 'alert-circle-outline' : 'radio-outline'}
+            size={24}
+            color={recovery ? colors.danger : colors.accent}
+          />
         )}
         <Text style={{ fontFamily: fontFamily.semibold, fontSize: 16, color: colors.ink, flex: 1 }}>
           From your Plaud recorder
@@ -74,15 +83,21 @@ export function RecorderSyncCard() {
       >
         {message}
       </Text>
-      {snapshot.phase !== 'recording' ? (
+      {snapshot.phase !== 'recording' && !restartRequired ? (
         <Button
           variant="text"
-          label={needsConnection ? 'Open recorder' : 'Check for new recordings'}
+          label={
+            needsConnection
+              ? 'Open recorder'
+              : recovery?.action === 'retry'
+                ? 'Retry transfer'
+                : 'Check for new recordings'
+          }
           loading={busy}
           onPress={() => (needsConnection ? router.push('/recorder') : void controller.sync())}
         />
       ) : null}
-      {!needsConnection && snapshot.wifiAvailable ? (
+      {!needsConnection && snapshot.wifiAvailable && !restartRequired ? (
         <Button
           label="Wi-Fi transfer options"
           variant="text"

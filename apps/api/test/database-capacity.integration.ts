@@ -25,7 +25,7 @@ describe('database capacity during slow external work', () => {
     for (let index = 0; index < 2; index++) {
       const assignment = await enrollments.createAssignment(actor, {
         userId: actor.userId,
-        serial: `CAP${randomBytes(6).toString('hex')}0001`,
+        serial: `882${randomBytes(6).toString('hex')}0001`,
         model: 'notepins',
       });
       const token = await enrollments.issueToken(actor, assignment.id, 600);

@@ -1,14 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card } from '../../ui/components';
 import { MediaControl } from '../../ui/MediaControl';
 import { fontFamily, useTheme } from '../../ui/theme';
 import { usePlaudSync } from './PlaudSyncProvider';
+import { ConfirmationDialog } from '../../ui/ConfirmationDialog';
 
 export function PlaudRecorderControls() {
   const { controller, snapshot } = usePlaudSync();
   const { colors } = useTheme();
   const { activity, busy, command, controlsAvailable, sessionId } = snapshot;
+  const [confirmStart, setConfirmStart] = useState(false);
+  useEffect(() => setConfirmStart(false), [activity]);
   const labels = {
     unknown: 'Reading recorder state',
     idle: 'Ready to record',
@@ -56,7 +60,7 @@ export function PlaudRecorderControls() {
                 recording
                 disabled={busy}
                 loading={command === 'start'}
-                onPress={() => void controller.control('start')}
+                onPress={() => setConfirmStart(true)}
               />
             </View>
           ) : activity === 'unknown' ? (
@@ -97,6 +101,20 @@ export function PlaudRecorderControls() {
           )}
         </>
       ) : null}
+      <ConfirmationDialog
+        visible={confirmStart}
+        title="Before you record"
+        description="Make sure everyone can see or hear that the Plaud recorder is active. Tell participants you are recording and get any permission required where you are. Aptly Able does not use the phone microphone."
+        confirmLabel="Participants are aware — start"
+        cancelLabel="Not yet"
+        loading={command === 'start'}
+        disabled={activity !== 'idle' || busy}
+        onConfirm={() => {
+          setConfirmStart(false);
+          void controller.control('start');
+        }}
+        onCancel={() => setConfirmStart(false)}
+      />
     </Card>
   );
 }

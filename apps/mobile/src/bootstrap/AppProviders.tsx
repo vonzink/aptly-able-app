@@ -6,6 +6,10 @@ import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import {
   createApiClient,
   createAuthClient,
+  createAccountClient,
+  type AccountClient,
+  createSessionController,
+  type SessionController,
   createTranscriptionClient,
   createPlaudDeviceClient,
   type TranscriptionClient,
@@ -15,7 +19,7 @@ import * as Crypto from 'expo-crypto';
 import { useFonts } from 'expo-font';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createReplaySafeLifecycle } from './recorder-lifecycle';
@@ -26,7 +30,8 @@ import {
   type RecorderSnapshot,
 } from '../features/recorder/recorder-controller';
 import { lightColors } from '../ui/theme';
-import { createDevelopmentCredentials } from '../services/development-credentials';
+import { createAccountSessionStore } from '../services/session-store';
+import { SessionRestoration } from '../features/session/SessionRestoration';
 import { RecordingsProvider } from '../features/recordings/RecordingsProvider';
 import { PlaudSyncProvider } from '../features/plaud-device/PlaudSyncProvider';
 import { enrollmentJournal } from '../services/enrollment-journal';
@@ -42,7 +47,11 @@ import {
 } from '../features/enrollment/enrollment-controller';
 
 const TranscriptionContext = createContext<TranscriptionClient | null>(null);
+const SessionContext = createContext<SessionController | null>(null);
 const AuthContext = createContext<AuthClient | null>(null);
+const AccountDeletionContext = createContext<
+  ((recoveryCredential?: string) => AccountClient) | null
+>(null);
 const PlaudDeviceContext = createContext<PlaudDeviceController | null>(null);
 const RecorderContext = createContext<RecorderController | null>(null);
 const EnrollmentContext = createContext<EnrollmentController | null>(null);
@@ -56,35 +65,44 @@ export function AppProviders({ children }: { children: ReactNode }) {
     Inter_800ExtraBold,
   });
   const clients = useMemo(() => {
-    const credentials = createDevelopmentCredentials();
     const service = {
       baseUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4100',
       ...(__DEV__ && process.env.EXPO_PUBLIC_DEV_HTTP_ORIGIN
         ? { developmentHttpOrigin: process.env.EXPO_PUBLIC_DEV_HTTP_ORIGIN }
         : {}),
-      getCredential: credentials.get,
     };
     const auth = createAuthClient(service);
-    if (process.env.EXPO_PUBLIC_AUTH_MODE === 'pilot') {
-      const clear = credentials.clear;
-      credentials.clear = () => {
-        const credential = credentials.get();
-        clear();
-        if (credential) void auth.logout(credential).catch(() => {});
-      };
-    }
-    const client = createApiClient({
-      ...service,
+    const session = createSessionController({
+      store: createAccountSessionStore(
+        service.baseUrl,
+        process.env.EXPO_PUBLIC_AUTH_MODE ?? 'development',
+      ),
+      verify: (credential, options) =>
+        createApiClient({ ...service, getCredential: () => credential }).session(options),
+      revoke: (credential) => auth.logout(credential),
     });
+    const authenticated = {
+      ...service,
+      getCredential: session.getCredential,
+      fetch: session.guardFetch(),
+    };
+    const client = createApiClient(authenticated);
     return {
       client,
       auth,
-      credentials,
+      session,
+      createDeletionClient: (recoveryCredential?: string) => {
+        // Retain this request's credential only in memory so an accepted deletion can
+        // retrieve its receipt after normal sessions are revoked. Wrong-password 401s
+        // must not trigger the global expired-session handler.
+        const credential = recoveryCredential ?? session.getCredential();
+        return createAccountClient({ ...service, getCredential: () => credential });
+      },
       transcription: createTranscriptionClient({
-        ...service,
+        ...authenticated,
       }),
       plaudDevice: createPlaudDeviceClient({
-        ...service,
+        ...authenticated,
       }),
     };
   }, []);
@@ -92,7 +110,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     () =>
       createEnrollmentController({
         client: clients.client,
-        credentials: clients.credentials,
+        authentication: clients.session,
         journal: enrollmentJournal,
         createIdempotencyKey: Crypto.randomUUID,
       }),
@@ -116,6 +134,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
     [plaudController],
   );
 
+  const sessionLifecycle = useMemo(() => createReplaySafeLifecycle(clients.session), [clients]);
+  useEffect(() => sessionLifecycle.setup(), [sessionLifecycle]);
   useEffect(() => lifecycle.setup(), [lifecycle]);
   useEffect(() => {
     const update = () => {
@@ -140,8 +160,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
   }, [plaudController, enrollmentController, plaudLifecycle]);
   useEffect(() => {
-    void enrollmentController.initialize();
-  }, [enrollmentController]);
+    const onSession = () => {
+      const state = clients.session.getSnapshot();
+      if (state.phase === 'signed-out' && enrollmentController.getSnapshot().actorId)
+        enrollmentController.clearSession(state.message);
+    };
+    const unsubscribe = clients.session.subscribe(onSession);
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state === 'active') clients.session.checkExpiry();
+    });
+    void enrollmentController.restoreSession();
+    return () => {
+      unsubscribe();
+      foreground.remove();
+    };
+  }, [clients, enrollmentController]);
+  const sessionState = useSyncExternalStore(
+    clients.session.subscribe,
+    clients.session.getSnapshot,
+    clients.session.getSnapshot,
+  );
 
   if (!fontsLoaded && !fontError)
     return (
@@ -159,21 +197,31 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <SafeAreaProvider>
-      <AuthContext.Provider value={clients.auth}>
-        <EnrollmentContext.Provider value={enrollmentController}>
-          <RecorderContext.Provider value={controller}>
-            <TranscriptionContext.Provider value={clients.transcription}>
-              <PlaudDeviceContext.Provider value={plaudController}>
-                <RecordingsProvider enrollment={enrollmentController}>
-                  <PlaudSyncProvider device={plaudController} enrollment={enrollmentController}>
-                    {children}
-                  </PlaudSyncProvider>
-                </RecordingsProvider>
-              </PlaudDeviceContext.Provider>
-            </TranscriptionContext.Provider>
-          </RecorderContext.Provider>
-        </EnrollmentContext.Provider>
-      </AuthContext.Provider>
+      <SessionContext.Provider value={clients.session}>
+        <AuthContext.Provider value={clients.auth}>
+          <AccountDeletionContext.Provider value={clients.createDeletionClient}>
+            <EnrollmentContext.Provider value={enrollmentController}>
+              <RecorderContext.Provider value={controller}>
+                <TranscriptionContext.Provider value={clients.transcription}>
+                  <PlaudDeviceContext.Provider value={plaudController}>
+                    <RecordingsProvider enrollment={enrollmentController}>
+                      <PlaudSyncProvider device={plaudController} enrollment={enrollmentController}>
+                        <SessionRestoration
+                          state={sessionState}
+                          onRetry={() => void enrollmentController.restoreSession()}
+                          onSignOut={() => void enrollmentController.signOut()}
+                        >
+                          {children}
+                        </SessionRestoration>
+                      </PlaudSyncProvider>
+                    </RecordingsProvider>
+                  </PlaudDeviceContext.Provider>
+                </TranscriptionContext.Provider>
+              </RecorderContext.Provider>
+            </EnrollmentContext.Provider>
+          </AccountDeletionContext.Provider>
+        </AuthContext.Provider>
+      </SessionContext.Provider>
     </SafeAreaProvider>
   );
 }
@@ -182,6 +230,12 @@ export function useAuthClient(): AuthClient {
   const client = useContext(AuthContext);
   if (!client) throw new Error('Authentication provider is missing.');
   return client;
+}
+
+export function useCreateAccountDeletionClient() {
+  const createClient = useContext(AccountDeletionContext);
+  if (!createClient) throw new Error('Account deletion provider is missing.');
+  return createClient;
 }
 
 export function useEnrollmentController(): EnrollmentController {
@@ -216,4 +270,15 @@ export function usePlaudDeviceController(): PlaudDeviceController {
   const controller = useContext(PlaudDeviceContext);
   if (!controller) throw new Error('Plaud device provider is missing.');
   return controller;
+}
+
+export function useAccountSession() {
+  const controller = useContext(SessionContext);
+  if (!controller) throw new Error('Session provider is missing.');
+  const state = useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+    controller.getSnapshot,
+  );
+  return { controller, state };
 }

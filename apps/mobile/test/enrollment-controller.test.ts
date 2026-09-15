@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ApiClient } from '@aptly/api-client';
+import {
+  createSessionController,
+  createSessionStore,
+  type ApiClient,
+  type SessionStore,
+} from '@aptly/api-client';
 import type { EnrollmentPreview, SessionResponse, SetupOperation } from '@aptly/contracts';
 
 import {
@@ -76,18 +81,184 @@ function fakeClient(overrides: Partial<ApiClient> = {}): ApiClient {
   } as ApiClient;
 }
 
-function setup(client = fakeClient(), store = journal()) {
-  let credential: string | undefined;
+function setup(client = fakeClient(), store = journal(), sessions?: SessionStore) {
+  const authentication = createSessionController({
+    store:
+      sessions ??
+      createSessionStore(
+        { read: async () => null, write: async () => {}, remove: async () => {} },
+        'https://api.example.test',
+        'pilot',
+      ),
+    verify: (_credential, options) => client.session(options),
+    revoke: async () => {},
+  });
   const controller = createEnrollmentController({
     client,
     journal: store,
     createIdempotencyKey: () => key,
-    credentials: { set: (value) => (credential = value), clear: () => (credential = undefined) },
+    authentication,
   });
-  return { controller, store, credential: () => credential };
+  return { controller, authentication, store, credential: authentication.getCredential };
 }
 
 describe('enrollment controller', () => {
+  it('restores the verified account and its saved recorder after restarting without a new QR', async () => {
+    let raw: string | null = null;
+    const sessions = createSessionStore(
+      {
+        read: async () => raw,
+        write: async (v) => {
+          raw = v;
+        },
+        remove: async () => {
+          raw = null;
+        },
+      },
+      'https://api.example.test',
+      'pilot',
+    );
+    const client = fakeClient({
+      session: async () => ({ user: { id: actorA, role: 'user' }, mode: 'pilot' }),
+    });
+    const store = journal({ actorId: actorA, key, operationId });
+    const original = setup(client, store, sessions);
+    await original.controller.signIn(
+      'a'.repeat(43),
+      'jake@example.com',
+      '2099-01-01T00:00:00.000Z',
+    );
+    const restarted = setup(client, store, sessions);
+    await restarted.controller.restoreSession();
+    expect(restarted.controller.getSnapshot()).toMatchObject({
+      phase: 'saved',
+      actorId: actorA,
+      accountEmail: 'jake@example.com',
+      operation,
+    });
+    await restarted.controller.signOut();
+    const signedOutRestart = setup(client, store, sessions);
+    await signedOutRestart.controller.restoreSession();
+    expect(signedOutRestart.controller.getSnapshot().actorId).toBeNull();
+    expect(store.value).toBeNull();
+  });
+
+  it('keeps a newly arriving QR while restoring authentication and resolves it afterwards', async () => {
+    let raw: string | null = null;
+    const sessions = createSessionStore(
+      {
+        read: async () => raw,
+        write: async (v) => {
+          raw = v;
+        },
+        remove: async () => {
+          raw = null;
+        },
+      },
+      'https://api.example.test',
+      'pilot',
+    );
+    const identity: SessionResponse = { user: { id: actorA, role: 'user' }, mode: 'pilot' };
+    const first = setup(fakeClient({ session: async () => identity }), journal(), sessions);
+    await first.controller.signIn('a'.repeat(43), 'jake@example.com', '2099-01-01T00:00:00.000Z');
+    const response = deferred<SessionResponse>();
+    const restarted = setup(fakeClient({ session: () => response.promise }), journal(), sessions);
+    const restoring = restarted.controller.restoreSession();
+    restarted.controller.receiveInvitation(token);
+    expect(restarted.controller.getSnapshot().actorId).toBeNull();
+    response.resolve(identity);
+    await restoring;
+    expect(restarted.controller.getSnapshot()).toMatchObject({ phase: 'ready', preview });
+  });
+
+  it('hides the previous recorder immediately when switching accounts', async () => {
+    let next = false;
+    const response = deferred<SessionResponse>();
+    const test = setup(
+      fakeClient({
+        session: () =>
+          next
+            ? response.promise
+            : Promise.resolve({ user: { id: actorA, role: 'user' }, mode: 'development' }),
+      }),
+      journal({ actorId: actorA, key, operationId }),
+    );
+    await test.controller.signIn('first');
+    next = true;
+    const switching = test.controller.signIn('second');
+    expect(test.controller.getSnapshot()).toMatchObject({
+      actorId: null,
+      operation: null,
+      preview: null,
+    });
+    response.resolve({ user: { id: actorB, role: 'user' }, mode: 'development' });
+    await switching;
+    expect(test.controller.getSnapshot()).toMatchObject({ actorId: actorB, operation: null });
+  });
+
+  it('shows a sign-in email only after the pilot session is verified, then clears it on sign-out', async () => {
+    const session = deferred<SessionResponse>();
+    const { controller } = setup(fakeClient({ session: () => session.promise }));
+    const pending = controller.signIn('private-credential', ' Jake@Example.com ');
+    expect(controller.getSnapshot().accountEmail).toBeNull();
+    session.resolve({ user: { id: actorA, role: 'user' }, mode: 'pilot' });
+    await pending;
+    expect(controller.getSnapshot().accountEmail).toBe('jake@example.com');
+    await controller.signOut();
+    expect(controller.getSnapshot().accountEmail).toBeNull();
+  });
+
+  it('does not retain another account email after a rejected sign-in', async () => {
+    let reject = false;
+    const { controller } = setup(
+      fakeClient({
+        session: async () => {
+          if (reject) throw new Error('Sign-in rejected');
+          return { user: { id: actorA, role: 'user' }, mode: 'pilot' };
+        },
+      }),
+    );
+    await controller.signIn('credential-a', 'first@example.com');
+    reject = true;
+    await controller.signIn('credential-b', 'second@example.com');
+    expect(controller.getSnapshot().actorId).toBeNull();
+    expect(controller.getSnapshot().accountEmail).toBeNull();
+  });
+
+  it('does not attach an email to development access', async () => {
+    const { controller } = setup();
+    await controller.signIn('local-user-code', 'unverified@example.com');
+    expect(controller.getSnapshot().accountEmail).toBeNull();
+  });
+
+  it('clears the displayed email if enrollment recovery reports an expired session', async () => {
+    const { controller } = setup(
+      fakeClient({
+        session: async () => ({ user: { id: actorA, role: 'user' }, mode: 'pilot' }),
+        getOperation: async () => {
+          throw { status: 401 };
+        },
+      }),
+      journal({ actorId: actorA, key, operationId }),
+    );
+    await controller.signIn('expired-credential', 'jake@example.com');
+    expect(controller.getSnapshot().phase).toBe('signed-out');
+    expect(controller.getSnapshot().accountEmail).toBeNull();
+  });
+
+  it('does not persist the sign-in email when saving recorder enrollment', async () => {
+    const { controller, store } = setup(
+      fakeClient({
+        session: async () => ({ user: { id: actorA, role: 'user' }, mode: 'pilot' }),
+      }),
+    );
+    controller.receiveInvitation(token);
+    await controller.signIn('private-credential', 'jake@example.com');
+    await controller.claim();
+    expect(controller.getSnapshot().accountEmail).toBe('jake@example.com');
+    expect(store.value).toEqual({ actorId: actorA, key, operationId });
+  });
+
   it('saves the actor and idempotency key before claiming and reuses that key after response loss', async () => {
     const store = journal();
     const keys: string[] = [];

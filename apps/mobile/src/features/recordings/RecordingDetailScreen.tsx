@@ -9,6 +9,7 @@ import { dateLabel, sizeLabel } from './presentation';
 import { usePlaybackSource } from './use-playback-source';
 import { RecordingPlayer } from './components/RecordingPlayer';
 import { usePlaudSync } from '../plaud-device/PlaudSyncProvider';
+import { transferRecovery } from '../plaud-device/transfer-recovery';
 import { RecordingNotesCard } from './components/RecordingNotesCard';
 import { RecordingDetailsEditor } from './components/RecordingDetailsEditor';
 import { TranscriptPanel } from './components/TranscriptPanel';
@@ -24,6 +25,7 @@ function RecordingDetail({ id }: { id: string }) {
   const state = useRecordings();
   const controller = useRecordingsController();
   const { controller: sync, snapshot: syncState } = usePlaudSync();
+  const recovery = transferRecovery(syncState);
   const [receiving, setReceiving] = useState(false);
   const [audioVersion, setAudioVersion] = useState(0);
   const recording = state.recordings.find((item) => item.id === id);
@@ -164,6 +166,7 @@ function RecordingDetail({ id }: { id: string }) {
               label="Load audio"
               variant="secondary"
               loading={receiving}
+              disabled={syncState.restartRequired}
               onPress={() => void receive(false)}
             />
           ) : null}
@@ -171,6 +174,9 @@ function RecordingDetail({ id }: { id: string }) {
             <Button
               label="Keep offline in app"
               loading={receiving || state.busy}
+              disabled={
+                syncState.restartRequired && (recording.audioAvailable === false || !!source.error)
+              }
               onPress={() => void receive(true)}
             />
           ) : null}
@@ -179,9 +185,14 @@ function RecordingDetail({ id }: { id: string }) {
               Receiving · {Math.round(syncState.progress)}%
             </Text>
           ) : null}
-          {syncState.message ? (
+          {receiving && syncState.phase === 'saving' ? (
+            <Text style={[styles.copy, { color: colors.inkSecondary }]}>
+              Saving the recording on this phone…
+            </Text>
+          ) : null}
+          {recovery?.message || syncState.message ? (
             <Text accessibilityRole="alert" style={[styles.copy, { color: colors.inkSecondary }]}>
-              {syncState.message}
+              {recovery?.message ?? syncState.message}
             </Text>
           ) : null}
           {(recording.audioAvailable === false || source.error) && syncState.phase === 'waiting' ? (
@@ -193,7 +204,7 @@ function RecordingDetail({ id }: { id: string }) {
         Original file: {recording.originalName}
         {'\n'}
         {recording.source
-          ? 'The recorder keeps the original. Cloud backup is not connected yet.'
+          ? 'The Plaud recorder keeps the source file. Aptly Able keeps this phone copy according to the setting above. This release does not upload recorder audio or transcripts to the Aptly Able server.'
           : 'This audio, your notes and any imported transcript are stored on this device.'}
       </Text>
       <Button
@@ -217,7 +228,7 @@ function RecordingDetail({ id }: { id: string }) {
       <ConfirmationDialog
         visible={confirmRemove}
         title="Delete from the app?"
-        description={`This deletes “${recording.title}”, its audio on this phone, and its transcript and notes. Copies saved outside the app stay where they are.`}
+        description={`This deletes “${recording.title}”, its Aptly Able audio copy on this phone, and its local transcript and notes. Source files and copies outside the app stay where they are. This release has no Aptly Able server copy to delete.`}
         confirmLabel="Delete recording"
         cancelLabel="Keep recording"
         loading={removing}
@@ -237,5 +248,5 @@ function RecordingDetail({ id }: { id: string }) {
 const styles = StyleSheet.create({
   label: { fontFamily: fontFamily.semibold, fontSize: 14 },
   copy: { fontFamily: fontFamily.regular, fontSize: 14, lineHeight: 22 },
-  footnote: { fontFamily: fontFamily.regular, fontSize: 11.5, lineHeight: 19, textAlign: 'center' },
+  footnote: { fontFamily: fontFamily.regular, fontSize: 14, lineHeight: 22, textAlign: 'center' },
 });

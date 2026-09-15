@@ -116,7 +116,7 @@ async function smoke() {
     assert.equal((await request('/v1/admin/recorder-assignments', userCredential, {})).status, 403);
     const assigned = await request('/v1/admin/recorder-assignments', adminCredential, {
       userId,
-      serial: 'SMOKE-8810004812',
+      serial: '881-SMOKE-0004812',
       model: 'notepro',
     });
     assert.equal(assigned.status, 201);
@@ -126,7 +126,7 @@ async function smoke() {
     assert.equal(detail.value.latestInvitation, null);
     const list = await request('/v1/admin/recorder-assignments?page=1', adminCredential);
     assert.equal(list.value.assignments[0].id, assignmentId);
-    assert.ok(!JSON.stringify(list.value).includes('SMOKE-8810004812'));
+    assert.ok(!JSON.stringify(list.value).includes('881-SMOKE-0004812'));
     const issued = await request(
       `/v1/admin/recorder-assignments/${assignmentId}/enrollment-tokens`,
       adminCredential,
@@ -181,7 +181,7 @@ async function smoke() {
       { status: 'released' },
     );
     assert.equal(ended.value.status, 'released');
-    for (const secret of [userCredential, adminCredential, rawToken, 'SMOKE-8810004812']) {
+    for (const secret of [userCredential, adminCredential, rawToken, '881-SMOKE-0004812']) {
       assert.ok(
         !output.includes(secret),
         'API/CLI logs must not contain secrets or the full recorder serial',

@@ -140,6 +140,53 @@ afterEach(async () => {
 });
 
 describe('native Plaud recorder controller', () => {
+  it.each([
+    { serial: '882B123456785641', model: 'notepro' as const },
+    { serial: '8810004812', model: 'notepins' as const },
+    { serial: '8800005641', model: 'notepins' as const },
+  ])('explains incompatible saved recorder $model before starting Bluetooth', async (recorder) => {
+    const test = harness({ session: vi.fn(async () => ({ ...session, recorder })) });
+    const scanning = test.controller.scan();
+    await vi.runAllTimersAsync();
+    await scanning;
+    expect(test.controller.getSnapshot().phase).toBe('error');
+    expect(test.controller.getSnapshot().message).toContain('dashboard');
+    expect(test.controller.getSnapshot().message).not.toContain(recorder.serial);
+    expect(test.native.initSDK).not.toHaveBeenCalled();
+    expect(test.native.startScan).not.toHaveBeenCalled();
+    expect(test.client.bind).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { serial: '882B123456785641', model: 'notepins' as const },
+    { serial: '881b123456784812', model: 'notepro' as const },
+  ])(
+    'finds only the exact alphanumeric $model serial, with a native device identifier',
+    async (recorder) => {
+      const test = harness({ session: vi.fn(async () => ({ ...session, recorder })) });
+      const nearby = { ...device, serialNumber: recorder.serial };
+      const scanning = test.controller.scan();
+      await flush();
+      test.emit('scanResult', {
+        devices: [
+          { ...nearby, uuid: '' },
+          { ...nearby, serialNumber: recorder.serial.slice(-4) },
+          { ...nearby, serialNumber: recorder.serial.replace(/b/i, 'C') },
+          {
+            ...nearby,
+            serialNumber: recorder.serial.replace(/b/i, recorder.serial.includes('B') ? 'b' : 'B'),
+          },
+        ],
+      });
+      await flush();
+      expect(test.controller.getSnapshot().phase).toBe('scanning');
+      test.emit('scanResult', { devices: [nearby] });
+      await scanning;
+      expect(test.controller.getSnapshot().phase).toBe('found');
+      expect(test.controller.getSnapshot().nearby).toEqual(nearby);
+    },
+  );
+
   it('keeps web / Expo Go unavailable without calling native methods or backend', async () => {
     const test = harness({}, webNative);
     expect(test.controller.getSnapshot().phase).toBe('unavailable');

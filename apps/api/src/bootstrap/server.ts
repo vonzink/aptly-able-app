@@ -1,3 +1,4 @@
+import { createAccountDeletionService } from '../modules/account-deletion/service.js';
 import { createPilotIdentity } from '../modules/identity/pilot-identity.js';
 import { createPlaudDeviceProvider } from '../modules/plaud-devices/provider.js';
 import { createPlaudDeviceService } from '../modules/plaud-devices/service.js';
@@ -15,6 +16,20 @@ try {
   const config = readConfig(process.env);
   const database = createDatabase(config.databaseUrl);
   const storage = createAudioStorage(config.recordingsDirectory);
+  const accountDeletion = database.deletionPool
+    ? createAccountDeletionService(database.deletionPool, storage)
+    : undefined;
+  let deletionRun: Promise<void> | undefined;
+  const deletionTimer = setInterval(() => {
+    if (!accountDeletion || deletionRun) return;
+    deletionRun = accountDeletion
+      .tick()
+      .catch(() => {})
+      .finally(() => {
+        deletionRun = undefined;
+      });
+  }, 10000);
+  deletionTimer.unref();
   const worker =
     database.workerPool && config.plaud
       ? createTranscriptionWorker({
@@ -25,6 +40,7 @@ try {
       : undefined;
   const app = buildApp({
     config,
+    ...(accountDeletion ? { accountDeletion } : {}),
     ...(database.pool && config.pilotAuthEnabled
       ? { pilotIdentity: createPilotIdentity(database.pool) }
       : {}),
@@ -41,13 +57,15 @@ try {
       : {}),
     ...(database.pool
       ? {
-          recordings: createProcessingService(database.pool, storage),
+          recordings: createProcessingService(database.pool, storage, database.uploadPool),
           enrollments: createEnrollmentService(database.pool),
           adminQueries: createAdminEnrollmentQueries(database.pool),
         }
       : {}),
   });
   app.addHook('onClose', async () => {
+    clearInterval(deletionTimer);
+    await deletionRun;
     await worker?.stop();
     await database.close();
   });

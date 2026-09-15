@@ -20,16 +20,26 @@ export function createDatabase(connectionString: string | undefined) {
   const pool = createPool(2);
   const devicePool = createPool(2);
   const workerPool = createPool(1);
+  const uploadPool = createPool(2);
+  const deletionPool = createPool(1);
   return {
     pool,
     devicePool,
     workerPool,
+    uploadPool,
+    deletionPool,
     async probe() {
       if (!pool) throw new Error('Database is not configured.');
       await pool.query('SELECT 1');
     },
     async close() {
-      await Promise.all([pool?.end(), devicePool?.end(), workerPool?.end()]);
+      await Promise.all([
+        pool?.end(),
+        devicePool?.end(),
+        workerPool?.end(),
+        uploadPool?.end(),
+        deletionPool?.end(),
+      ]);
     },
   };
 }

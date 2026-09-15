@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AppProviders } from '../bootstrap/AppProviders';
 import { fontFamily, useTheme } from '../ui/theme';
+import { RecordingActivityBanner } from '../features/plaud-device/RecordingActivityBanner';
 
 function Navigation() {
   const { colors, dark } = useTheme();
@@ -16,6 +17,7 @@ function Navigation() {
   return (
     <>
       <StatusBar style={dark ? 'light' : 'dark'} />
+      <RecordingActivityBanner />
       <Tabs
         screenOptions={({ route }) => ({
           headerShown: false,
@@ -43,6 +45,9 @@ function Navigation() {
         <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
         <Tabs.Screen name="enroll" options={{ href: null }} />
         <Tabs.Screen name="recording" options={{ href: null }} />
+        <Tabs.Screen name="privacy" options={{ href: null }} />
+        <Tabs.Screen name="support" options={{ href: null }} />
+        <Tabs.Screen name="delete-account" options={{ href: null }} />
       </Tabs>
     </>
   );

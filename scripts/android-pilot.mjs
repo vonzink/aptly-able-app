@@ -104,6 +104,7 @@ try {
     APTLY_PILOT_KEY_PASSWORD: readFileSync(passwordFile, 'utf8').trim(),
   });
   await run('node', ['scripts/check-plaud-sdk.mjs', 'android']);
+  await run('pnpm', ['--filter', '@aptly/product-content', 'build']);
   await run('pnpm', ['--filter', '@aptly/contracts', 'build']);
   await run('pnpm', ['--filter', '@aptly/api-client', 'build']);
   await run(

@@ -21,6 +21,7 @@ export function createTranscriptionWorker({
   async function runTick() {
     const client = await pool.connect();
     let locked = false;
+    let accountLocked: string | undefined;
     try {
       locked = (
         await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1) AS locked', [
@@ -30,10 +31,17 @@ export function createTranscriptionWorker({
       if (!locked) return;
       const row = (
         await client.query<RecordingRow>(
-          `SELECT * FROM processing_recordings WHERE status IN ('queued','uploading','submitting','transcribing') AND next_poll_at<=clock_timestamp() ORDER BY next_poll_at,created_at LIMIT 1`,
+          `SELECT * FROM processing_recordings WHERE NOT EXISTS (SELECT 1 FROM account_deletions d WHERE d.user_id=processing_recordings.user_id) AND status IN ('queued','uploading','submitting','transcribing') AND next_poll_at<=clock_timestamp() ORDER BY next_poll_at,created_at LIMIT 1`,
         )
       ).rows[0];
       if (!row) return;
+      await client.query('SELECT pg_advisory_lock_shared(hashtextextended($1,418))', [row.user_id]);
+      accountLocked = row.user_id;
+      if (
+        (await client.query('SELECT 1 FROM account_deletions WHERE user_id=$1', [row.user_id]))
+          .rowCount
+      )
+        return;
       const fail = async (code: string, status = 'failed') => {
         await client.query(
           'UPDATE processing_recordings SET status=$2,error_code=$3,updated_at=clock_timestamp() WHERE id=$1',
@@ -131,6 +139,10 @@ export function createTranscriptionWorker({
       );
     } finally {
       try {
+        if (accountLocked)
+          await client.query('SELECT pg_advisory_unlock_shared(hashtextextended($1,418))', [
+            accountLocked,
+          ]);
         if (locked) await client.query('SELECT pg_advisory_unlock($1)', [WORKER_LOCK]);
       } finally {
         client.release();

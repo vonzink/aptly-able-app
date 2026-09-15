@@ -1,3 +1,4 @@
+import { lockActiveAccount } from '../account-deletion/lock.js';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { z } from 'zod';
@@ -56,6 +57,7 @@ export function createPlaudDeviceService(
     try {
       await client.query('BEGIN');
       await client.query("SET LOCAL lock_timeout = '5s'");
+      await lockActiveAccount(client, actor.userId);
       const reference = (
         await client.query<{ recorder_id: string; assignment_id: string }>(
           `SELECT a.recorder_id, a.id AS assignment_id FROM setup_operations o

@@ -15,6 +15,8 @@ import { parseTranscript } from './transcript-parser';
 export interface RecordingsSnapshot {
   recordings: LocalRecording[];
   unavailableCount: number;
+  /** A failed root read must never be treated as an empty, usable library. */
+  readable: boolean;
   loading: boolean;
   busy: boolean;
   error: string | null;
@@ -50,6 +52,7 @@ export function createRecordingsController({
   let snapshot: RecordingsSnapshot = {
     recordings: [],
     unavailableCount: 0,
+    readable: false,
     loading: false,
     busy: false,
     error: null,
@@ -108,12 +111,19 @@ export function createRecordingsController({
   }
 
   async function refreshLibrary() {
-    const result = store.readLibrary
-      ? await store.readLibrary()
-      : { recordings: await store.list(), unavailableCount: 0 };
-    result.recordings.forEach(assertLocalRecording);
-    result.recordings.sort((left, right) => right.importedAt.localeCompare(left.importedAt));
-    publish(result);
+    try {
+      const result = store.readLibrary
+        ? await store.readLibrary()
+        : { recordings: await store.list(), unavailableCount: 0 };
+      result.recordings.forEach(assertLocalRecording);
+      result.recordings.sort((left, right) => right.importedAt.localeCompare(left.importedAt));
+      publish({ ...result, readable: true });
+      initialized = true;
+    } catch (error) {
+      initialized = false;
+      publish({ readable: false });
+      throw error;
+    }
   }
 
   function reload(): Promise<void> {
@@ -136,6 +146,9 @@ export function createRecordingsController({
     return run(
       async () => {
         if (source) {
+          // A previous save may have committed even if its following read failed.
+          // Reconcile persisted identities before deciding to write another record.
+          await refreshLibrary();
           if (await store.deviceAudio?.isDismissed(source))
             throw new Error('This recording was deleted from the app.');
           const existing = snapshot.recordings.find(

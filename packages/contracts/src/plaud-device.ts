@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAssignmentRequestSchema, recorderModelSchema } from './enrollment.js';
+import { recorderModelSchema, recorderSerialSchema } from './recorder-identity.js';
 
 export const plaudDeviceCapabilitiesSchema = z.discriminatedUnion('available', [
   z.strictObject({ available: z.literal(true), reason: z.literal('ready') }),
@@ -19,8 +19,10 @@ export const plaudDeviceSessionSchema = z.strictObject({
   expiresAt: z.iso.datetime(),
   customDomain: z.enum(['platform-us.plaud.ai', 'platform-jp.plaud.ai']),
   userId: z.uuid(),
+  // Keep old assignments readable so the phone can explain a model mismatch
+  // before initializing the SDK, rather than reporting an unreadable API response.
   recorder: z.strictObject({
-    serial: createAssignmentRequestSchema.shape.serial,
+    serial: recorderSerialSchema,
     model: recorderModelSchema,
   }),
 });

@@ -2,11 +2,12 @@ import type { RecordingsController } from '../recordings/recordings-controller';
 import { sourceKey, type PlaudRecordingSource } from '../recordings/recording-model';
 import type { PlaudFilePort, PlaudRecordingFile, PlaudRecorderCommand } from './plaud-file-port';
 import { sendRecorderCommand } from './recorder-command';
+import { receivePlaudAudio, TransferFailure } from './plaud-audio-transfer';
+import { transferRestartMessage } from './transfer-recovery';
 import type { PlaudSyncSnapshot } from './plaud-sync-model';
 export type { PlaudSyncSnapshot } from './plaud-sync-model';
 
 type Connection = { actorId: string; serial: string };
-class TransferFailure extends Error {}
 
 export function createPlaudSyncController({
   native,
@@ -34,6 +35,7 @@ export function createPlaudSyncController({
     cancelling: false,
     busy: false,
     wifiQueued: false,
+    restartRequired: false,
   };
   const listeners = new Set<() => void>();
   let connection: Connection | null = null;
@@ -49,7 +51,6 @@ export function createPlaudSyncController({
   let timer: ReturnType<typeof setTimeout> | undefined;
   let subscriptions: Array<{ remove(): void }> = [];
   let cancelList: (() => void) | undefined;
-  let touchExport: ((sessionId: number, progress: number) => void) | undefined;
   const publish = (change: Partial<PlaudSyncSnapshot>) => {
     if (disposed) return;
     snapshot = { ...snapshot, ...change };
@@ -137,81 +138,49 @@ export function createPlaudSyncController({
     own: number,
     restore?: { id: string; keep: boolean; name: string },
   ) {
-    let stalled = false;
-    let deadline: ReturnType<typeof setTimeout>;
-    const arm = () => {
-      clearTimeout(deadline);
-      deadline = setTimeout(() => {
-        stalled = true;
-        if (snapshot.transport === 'wifi') void native.wifi?.stop().catch(() => undefined);
-        if (alive(own))
-          publish({
-            phase: 'error',
-            progress: null,
-            message:
-              'The recorder transfer stopped responding. Reopen Aptly Able and reconnect if it does not recover.',
-          });
-      }, timeoutMs);
-    };
-    touchExport = (sessionId, progress) => {
-      if (sessionId !== file.sessionId || !alive(own) || stalled || !Number.isFinite(progress))
-        return;
-      publish({ progress: Math.max(0, Math.min(100, progress)) });
-      arm();
-    };
+    const revision = recordingRevision;
+    const current = () => alive(own) && recording === false && revision === recordingRevision;
     publish({ phase: 'syncing', progress: 0, message: null });
-    arm();
-    let outputPath: string | undefined;
-    try {
-      // Stopping the transport is not proof that the SDK has released its exporter.
-      // Keep this lane occupied until its terminal callback, even after cancellation.
-      const result = await (snapshot.transport === 'wifi'
-        ? native.wifi!.exportAudio(file.sessionId)
-        : native.exportAudio(file.sessionId));
-      clearTimeout(deadline!);
-      outputPath = result.outputPath;
-      if (!alive(own) || stalled || recording !== false) return;
-      if (result.sessionId !== file.sessionId)
-        throw new TransferFailure(
-          'The recorder returned a different recording. Try syncing again.',
-        );
-      const input = await native.readExport(outputPath);
-      if (!alive(own) || recording !== false) return;
-      const audio = {
-        ...input,
-        name: restore?.name ?? `Plaud ${source.serial.slice(-4)} recording ${file.sessionId}.mp3`,
-      };
-      const id = restore
-        ? await library
-            .restoreDeviceAudio(restore.id, audio, restore.keep)
-            .then((saved) => (saved ? restore.id : null))
-        : await library.importDeviceAudio(audio, source);
-      if (!id)
-        throw new TransferFailure(
-          library.getSnapshot().error ?? 'The received recording could not be saved. Try again.',
-        );
-      await library.setDuration(id, file.duration);
-      return true;
-    } finally {
-      clearTimeout(deadline!);
-      touchExport = undefined;
-      if (outputPath) await native.removeExport(outputPath).catch(() => undefined);
-    }
+    return receivePlaudAudio({
+      native,
+      library,
+      file,
+      source,
+      current,
+      timeoutMs,
+      transport: snapshot.transport,
+      ...(restore ? { restore } : {}),
+      onProgress: (progress) => publish({ progress }),
+      onSaving: () => publish({ phase: 'saving', progress: null }),
+      onStalled: (restartRequired) =>
+        publish({
+          phase: 'error',
+          progress: null,
+          restartRequired,
+          wifiQueued: false,
+          message: restartRequired
+            ? transferRestartMessage
+            : 'The interrupted transfer has stopped. Keep your recorder nearby and retry. Recordings already saved will be skipped.',
+        }),
+    });
   }
   async function cycle(own: number, selected: Connection, wifi: boolean) {
     await library.initialize();
     if (!alive(own)) return;
-    if (library.getSnapshot().unavailableCount > 0)
+    if (!library.getSnapshot().readable || library.getSnapshot().unavailableCount > 0)
       throw new TransferFailure(
-        'Automatic sync is paused because some saved recordings could not be read. Refresh your library before syncing again.',
+        'Sync is paused because your saved recordings could not be read. Refresh your library, then retry the transfer.',
       );
     publish({ phase: 'checking', progress: null, message: null });
     await reconcileState(own);
     if (!alive(own) || recording !== false) return;
+    const revision = recordingRevision;
+    const current = () => alive(own) && recording === false && revision === recordingRevision;
     const files = await fileList();
     const pending: Array<{ file: PlaudRecordingFile; source: PlaudRecordingSource }> = [];
+    const seen = new Set<string>();
     for (const file of files) {
-      if (!alive(own) || recording !== false) return;
+      if (!current()) return;
       if (!eligible(file, selected.serial)) continue;
       const source: PlaudRecordingSource = {
         kind: 'plaud',
@@ -220,33 +189,33 @@ export function createPlaudSyncController({
         sessionId: file.sessionId,
         sizeBytes: file.size,
       };
+      const key = sourceKey(source);
+      if (seen.has(key)) continue;
+      seen.add(key);
       if (
         library
           .getSnapshot()
-          .recordings.some(
-            (record) => record.source && sourceKey(record.source) === sourceKey(source),
-          )
+          .recordings.some((record) => record.source && sourceKey(record.source) === key)
       )
         continue;
       if (await library.isSourceDismissed(source)) continue;
       pending.push({ file, source });
     }
-    if (!alive(own) || recording !== false) return;
+    if (!current()) return;
     publish({ total: pending.length, completed: 0 });
     if (wifi && pending.length) {
       publish({ phase: 'connecting-wifi' });
       await native.wifi!.start();
     }
     for (const { file, source } of pending) {
-      if (!alive(own) || recording !== false) return;
+      if (!current()) return;
       if (!wifi && snapshot.wifiQueued) break;
       if (await transfer(file, source, own)) {
         if (alive(own)) publish({ completed: snapshot.completed + 1 });
       }
       if (snapshot.phase === 'error') return;
     }
-    if (alive(own) && recording === false)
-      publish({ phase: 'idle', progress: null, message: null });
+    if (current()) publish({ phase: 'idle', progress: null, message: null });
   }
   function sync(wifi = false): Promise<void> {
     if (!connection || !native.isAvailable || disposed) return Promise.resolve();
@@ -255,8 +224,12 @@ export function createPlaudSyncController({
       return Promise.resolve();
     }
     if (running) {
+      if (snapshot.restartRequired) return running;
       if (wifi && native.wifi && snapshot.transport === 'bluetooth')
-        publish({ wifiQueued: true, message: 'Wi-Fi will start after the current operation finishes.' });
+        publish({
+          wifiQueued: true,
+          message: 'Wi-Fi will start after the current operation finishes.',
+        });
       rescan = true;
       return running;
     }
@@ -265,13 +238,24 @@ export function createPlaudSyncController({
       return Promise.resolve();
     }
     cancelled = false;
-    publish({ transport: wifi ? 'wifi' : 'bluetooth', cancelling: false, completed: 0, total: 0, busy: true, wifiQueued: false });
+    publish({
+      transport: wifi ? 'wifi' : 'bluetooth',
+      cancelling: false,
+      completed: 0,
+      total: 0,
+      busy: true,
+      wifiQueued: false,
+    });
     clearTimeout(timer);
     const own = generation;
     running = cycle(own, connection, wifi)
       .catch((error) => {
         if (alive(own) && recording) {
-          publish({ phase: 'recording', progress: null, message: 'Transfer paused while your recorder is recording.' });
+          publish({
+            phase: 'recording',
+            progress: null,
+            message: 'Transfer paused while your recorder is recording.',
+          });
           return;
         }
         if (alive(own))
@@ -291,12 +275,18 @@ export function createPlaudSyncController({
         running = null;
         publish({ busy: false });
         if (own === generation && cancelled) {
-          publish({ phase: recording ? 'recording' : 'idle', progress: null, cancelling: false, message: 'Wi-Fi transfer stopped. Recordings already saved remain in your library.' });
+          publish({
+            phase: recording ? 'recording' : 'idle',
+            progress: null,
+            cancelling: false,
+            message: 'Wi-Fi transfer stopped. Recordings already saved remain in your library.',
+          });
         }
         if (connection && !disposed) {
           const immediate = rescan || snapshot.wifiQueued;
           rescan = false;
-          if ((snapshot.phase !== 'error' || snapshot.wifiQueued) && !cancelled) schedule(immediate ? 0 : refreshMs);
+          if ((snapshot.phase !== 'error' || snapshot.wifiQueued) && !cancelled)
+            schedule(immediate ? 0 : refreshMs);
         }
       });
     return running;
@@ -315,8 +305,22 @@ export function createPlaudSyncController({
     }
     const own = generation;
     while (running) {
-      await running;
-      if (!connected(own)) return false;
+      if (!connected(own) || snapshot.restartRequired) return false;
+      let onChange = () => {};
+      const interrupted = new Promise<void>((resolve) => {
+        onChange = () => {
+          if (!connected(own) || snapshot.restartRequired) resolve();
+        };
+        listeners.add(onChange);
+      });
+      try {
+        // Release this UI request on interruption, but retain ownership of the
+        // native export until its terminal callback. Never open a second lane.
+        await Promise.race([running, interrupted]);
+      } finally {
+        listeners.delete(onChange);
+      }
+      if (!connected(own) || snapshot.restartRequired) return false;
     }
     if (recording) {
       publish({ message: 'Stop the current recording before loading audio.' });
@@ -336,8 +340,9 @@ export function createPlaudSyncController({
       publish({ phase: 'checking', progress: null, message: null });
       await reconcileState(own);
       if (!alive(own) || recording !== false) return;
+      const revision = recordingRevision;
       const files = await fileList();
-      if (!alive(own) || recording !== false) return;
+      if (!alive(own) || recording !== false || revision !== recordingRevision) return;
       const file = files.find(
         (item) =>
           eligible(item, source.serial) &&
@@ -364,7 +369,8 @@ export function createPlaudSyncController({
       .finally(() => {
         running = null;
         publish({ busy: false });
-        if (snapshot.phase !== 'error' || snapshot.wifiQueued) schedule(snapshot.wifiQueued ? 0 : refreshMs);
+        if (snapshot.phase !== 'error' || snapshot.wifiQueued)
+          schedule(snapshot.wifiQueued ? 0 : refreshMs);
       });
     await running;
     return received;
@@ -403,7 +409,13 @@ export function createPlaudSyncController({
       if (event.status !== 0) return;
       recordingRevision++;
       recording = true;
-      publish({ phase: 'recording', activity: 'recording', sessionId: event.sessionId, progress: null, message: null });
+      publish({
+        phase: 'recording',
+        activity: 'recording',
+        sessionId: event.sessionId,
+        progress: null,
+        message: null,
+      });
       if (snapshot.transport === 'wifi') void native.wifi?.stop().catch(() => undefined);
     };
     subscriptions = [
@@ -413,7 +425,12 @@ export function createPlaudSyncController({
         if (!connected(own)) return;
         recordingRevision++;
         recording = true;
-        publish({ phase: 'recording', activity: 'paused', sessionId: event.sessionId, progress: null });
+        publish({
+          phase: 'recording',
+          activity: 'paused',
+          sessionId: event.sessionId,
+          progress: null,
+        });
         if (snapshot.transport === 'wifi') void native.wifi?.stop().catch(() => undefined);
       }),
       native.addListener('recordStop', () => {
@@ -423,9 +440,6 @@ export function createPlaudSyncController({
         publish({ phase: 'idle', activity: 'idle', sessionId: null });
         schedule(750);
       }),
-      native.addListener('exportProgress', ({ sessionId, progress }) =>
-        touchExport?.(sessionId, progress),
-      ),
     ];
     void sync();
   }
@@ -442,7 +456,10 @@ export function createPlaudSyncController({
     syncWifi: () => sync(true),
     cancelWifi() {
       if (snapshot.wifiQueued) {
-        publish({ wifiQueued: false, message: 'Wi-Fi request cancelled. Bluetooth sync will continue.' });
+        publish({
+          wifiQueued: false,
+          message: 'Wi-Fi request cancelled. Bluetooth sync will continue.',
+        });
         return;
       }
       if (!running || snapshot.transport !== 'wifi' || snapshot.cancelling) return;
@@ -455,10 +472,14 @@ export function createPlaudSyncController({
     async control(command: PlaudRecorderCommand) {
       if (!connection || running || !native.controlRecorder) return;
       const { activity, sessionId } = snapshot;
-      const allowed = command === 'start' ? activity === 'idle'
-        : command === 'stop' ? activity === 'recording' || activity === 'paused'
-          : command === 'pause' ? activity === 'recording' && sessionId !== null
-            : activity === 'paused' && sessionId !== null;
+      const allowed =
+        command === 'start'
+          ? activity === 'idle'
+          : command === 'stop'
+            ? activity === 'recording' || activity === 'paused'
+            : command === 'pause'
+              ? activity === 'recording' && sessionId !== null
+              : activity === 'paused' && sessionId !== null;
       if (!allowed) return;
       cancelled = false;
       clearTimeout(timer);
@@ -470,7 +491,11 @@ export function createPlaudSyncController({
         .catch((error) => {
           if (!alive(own)) return;
           recording = null;
-          publish({ activity: 'unknown', sessionId: null, message: error instanceof Error ? error.message : 'Recorder action failed.' });
+          publish({
+            activity: 'unknown',
+            sessionId: null,
+            message: error instanceof Error ? error.message : 'Recorder action failed.',
+          });
         })
         .finally(() => {
           running = null;

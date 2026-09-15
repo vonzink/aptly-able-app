@@ -140,6 +140,8 @@ export declare class PlaudSdkModule extends NativeModule<PlaudSdkEvents> {
    * usage strings), so call it behind a `Platform.OS === 'android'` check.
    */
   requestPermissions?(): Promise<{ granted: boolean }>;
+  /** Read-only OS authorization; never prompts or initializes Bluetooth. Absent in older builds. */
+  getBluetoothPermissionStatus?(): 'granted' | 'not-granted' | 'not-determined' | 'restricted' | 'unknown';
   /**
    * Start scanning. On Android this first requests BLE permissions and rejects with
    * `ERR_PLAUD_PERMISSIONS` if they're denied; if Bluetooth is off, it resolves and emits
