@@ -2,6 +2,10 @@
 
 Date: 2026-09-15. Baseline: `eed0214`; implementation branch: `codex/cross-store-readiness`.
 
+Subsequent integration: these reviewed changes were merged to `main` and deployed
+as [pilot 0.1.2 (8)](2026-09-15-build8-deployment.md). The initial local-validation
+results below are historical; installed iPhones were not updated by deployment.
+
 This record covers the shared app, platform-specific packaging and account-deletion operations. It is not an approval certificate. Nothing in this pass uploads to either store, deploys services, replaces signing keys or updates installed phones.
 
 The subsequent [recovery and temporary-file cleanup pass](cross-store-recovery-cleanup.md)

@@ -1,6 +1,9 @@
 # Transfer recovery and temporary-file cleanup
 
 Date: 2026-09-15. Baseline: `188500a`; branch: `codex/cross-store-readiness`.
+Subsequently merged to `main` and deployed as
+[pilot 0.1.2 (8)](2026-09-15-build8-deployment.md). The local-pass evidence below
+predates that deployment; the iPhone installation remains unchanged.
 This follows [cross-store readiness](cross-store-readiness.md). Changes and builds
 remain local. No deployed service, installed phone or store submission was updated.
 

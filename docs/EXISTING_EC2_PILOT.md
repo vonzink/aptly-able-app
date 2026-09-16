@@ -65,7 +65,16 @@ Use the inspected host details below for this deployment.
 - Preserve existing mail, root-domain and Vaultwarden DNS records. A wildcard
   Porkbun parking record can coexist with a new exact `plaud` record.
 
-## Current deployment — September 15, 2026
+## Deployment baseline — September 15, 2026
+
+**Current update:** [pilot 0.1.2 (8)](verification/2026-09-15-build8-deployment.md)
+was activated at 2026-09-16 03:38 UTC. The `current` symlink now points to
+`/opt/aptly-able-pilot/releases/20260916T033632Z-0.1.2-build8-0d68194`, using
+`aptly-able-pilot-api:0.1.2-build8`. API configuration, schema, database,
+Vaultwarden and Caddy remain as described below. The build 7 release is retained
+for reviewed recovery. Temporary SSH access was removed after verification.
+
+The preceding build 7 baseline was:
 
 - AWS account `816069168722` (Vantedges Technologies), region `us-east-2`.
 - Instance `i-066c05c21f8aa2665`, `aptlyable-vaultwarden-prod-01`, Ubuntu 24.04,

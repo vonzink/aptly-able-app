@@ -83,6 +83,12 @@ This is a configuration migration; the app and dashboard stay one codebase.
 
 ## Status
 
+Latest: September 15, 2026, Amplify job **8 SUCCEED**, Android **0.1.2 (8)**.
+The compatible backend update is live, all 25 public file hashes and nine entry
+routes passed, and existing rewrites/DNS remain unchanged. See
+[build 8 deployment and recovery](verification/2026-09-15-build8-deployment.md).
+The build 7 record below is historical.
+
 September 15, 2026: Amplify deployment job **7** succeeded. The Android download
 is **0.1.2 (7)**. The complete website preserves the dashboard demo, enrollment
 flow and existing assets, and adds direct public privacy/support routes. All 23
