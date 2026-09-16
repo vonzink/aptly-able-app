@@ -81,7 +81,10 @@ export function PlaudWifiTransferCard() {
           Stop the recording before transferring audio.
         </Text>
       ) : null}
-      {transport === 'wifi' && !busy && (snapshot.phase === 'error' || snapshot.message) ? (
+      {transport === 'wifi' &&
+      !busy &&
+      !snapshot.restartRequired &&
+      (snapshot.phase === 'error' || snapshot.message) ? (
         <Button
           label="Use Bluetooth"
           variant="secondary"

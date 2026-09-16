@@ -11,6 +11,7 @@ export function PlaudRecorderControls() {
   const { controller, snapshot } = usePlaudSync();
   const { colors } = useTheme();
   const { activity, busy, command, controlsAvailable, sessionId } = snapshot;
+  const controlsBlocked = busy || snapshot.restartRequired;
   const [confirmStart, setConfirmStart] = useState(false);
   useEffect(() => setConfirmStart(false), [activity]);
   const labels = {
@@ -33,13 +34,15 @@ export function PlaudRecorderControls() {
         </Text>
       </View>
       <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-        {command
-          ? 'Waiting for your recorder to confirm…'
-          : !controlsAvailable
-            ? 'Update the phone app to use recorder controls.'
-            : busy
-              ? 'Recorder controls will be available when the current transfer finishes.'
-              : 'Control your nearby Plaud recorder here. Stop to finish and receive the recording.'}
+        {snapshot.restartRequired
+          ? 'Reopen the app to use its controls. Use the recorder’s own button to stop any active recording.'
+          : command
+            ? 'Waiting for your recorder to confirm…'
+            : !controlsAvailable
+              ? 'Update the phone app to use recorder controls.'
+              : busy
+                ? 'Recorder controls will be available when the current transfer finishes.'
+                : 'Control your nearby Plaud recorder here. Stop to finish and receive the recording.'}
       </Text>
       {snapshot.message && snapshot.transport !== 'wifi' && !snapshot.wifiQueued ? (
         <Text
@@ -58,7 +61,7 @@ export function PlaudRecorderControls() {
                 label="Start recording"
                 prominent
                 recording
-                disabled={busy}
+                disabled={controlsBlocked}
                 loading={command === 'start'}
                 onPress={() => setConfirmStart(true)}
               />
@@ -67,7 +70,7 @@ export function PlaudRecorderControls() {
             <Button
               label="Refresh recorder state"
               variant="secondary"
-              disabled={busy}
+              disabled={controlsBlocked}
               onPress={() => void controller.sync()}
             />
           ) : (
@@ -76,7 +79,7 @@ export function PlaudRecorderControls() {
                 <MediaControl
                   icon={activity === 'paused' ? 'play' : 'pause'}
                   label={activity === 'paused' ? 'Resume' : 'Pause'}
-                  disabled={busy}
+                  disabled={controlsBlocked}
                   loading={command === 'pause' || command === 'resume'}
                   onPress={() =>
                     void controller.control(activity === 'paused' ? 'resume' : 'pause')
@@ -93,7 +96,7 @@ export function PlaudRecorderControls() {
                 label="Stop & save"
                 prominent
                 recording
-                disabled={busy}
+                disabled={controlsBlocked}
                 loading={command === 'stop'}
                 onPress={() => void controller.control('stop')}
               />
@@ -108,7 +111,7 @@ export function PlaudRecorderControls() {
         confirmLabel="Participants are aware — start"
         cancelLabel="Not yet"
         loading={command === 'start'}
-        disabled={activity !== 'idle' || busy}
+        disabled={activity !== 'idle' || controlsBlocked}
         onConfirm={() => {
           setConfirmStart(false);
           void controller.control('start');

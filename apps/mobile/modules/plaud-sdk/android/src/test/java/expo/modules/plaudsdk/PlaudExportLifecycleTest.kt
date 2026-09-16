@@ -59,7 +59,7 @@ class PlaudExportLifecycleTest {
     val export = PlaudExportLifecycle(promise, gate.acquire()!!, {}, {})
     export.startFailed()
     assertTrue(gate.isBusy())
-    assertEquals(listOf("ERR_PLAUD_EXPORT"), promise.rejections)
+    assertEquals(listOf("ERR_PLAUD_EXPORT_RESTART_REQUIRED"), promise.rejections)
     export.failed()
     assertFalse(gate.isBusy())
     assertEquals(1, promise.rejections.size)

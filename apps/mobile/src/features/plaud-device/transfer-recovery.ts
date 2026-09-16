@@ -18,3 +18,17 @@ export function transferRecovery(
     };
   return null;
 }
+
+/** These native failures settle the caller without proving the shared exporter stopped. */
+export function requiresRecorderRestart(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    [
+      'ERR_PLAUD_EXPORT_STALLED',
+      'ERR_PLAUD_EXPORT_RESTART_REQUIRED',
+      'ERR_PLAUD_EXPORT_PENDING',
+    ].includes(String(error.code))
+  );
+}

@@ -1,3 +1,4 @@
+import { requiresRecorderRestart, transferRestartMessage } from './transfer-recovery';
 import { ApiError, type PlaudDeviceClient } from '@aptly/api-client';
 import { recorderIdentitySchema, type PlaudDeviceSession } from '@aptly/contracts';
 
@@ -216,8 +217,9 @@ export function createPlaudDeviceController({
         publish({
           phase: 'error',
           permissionDenied: permissionError(error),
-          message:
-            error instanceof DeviceFailure || error instanceof ApiError
+          message: requiresRecorderRestart(error)
+            ? transferRestartMessage
+            : error instanceof DeviceFailure || error instanceof ApiError
               ? error.message
               : permissionError(error)
                 ? requireScanDisclosure

@@ -21,7 +21,7 @@ internal class PlaudExportLifecycle(
   )
 
   fun startFailed() = call.reject(
-    "ERR_PLAUD_EXPORT",
+    "ERR_PLAUD_EXPORT_RESTART_REQUIRED",
     "Recording transfer could not be started. Fully close and reopen the app before trying again.",
     null
   )

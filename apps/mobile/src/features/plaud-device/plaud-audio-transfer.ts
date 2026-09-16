@@ -2,9 +2,11 @@ import type { PlaudRecordingSource } from '../recordings/recording-model';
 import type { RecordingsController } from '../recordings/recordings-controller';
 import type { PlaudFilePort, PlaudRecordingFile } from './plaud-file-port';
 
+import { requiresRecorderRestart, transferRestartMessage } from './transfer-recovery';
+
 export class TransferFailure extends Error {}
 
-/** Owns one export through its terminal callback, local commit and temporary-file cleanup. */
+/** Owns one export through completion, or preserves the restart gate when native work may remain. */
 export async function receivePlaudAudio({
   native,
   library,
@@ -32,6 +34,7 @@ export async function receivePlaudAudio({
 }): Promise<boolean> {
   let stalled = false;
   let exported = false;
+  let nativeStillActive = false;
   let lastProgress = 0;
   let deadline: ReturnType<typeof setTimeout>;
   const arm = () => {
@@ -61,11 +64,26 @@ export async function receivePlaudAudio({
   arm();
   let outputPath: string | undefined;
   try {
-    // A timeout/stop is not proof of cancellation. Await the SDK terminal callback
-    // so a second transfer cannot overlap writes to its export directory.
-    const result = await (transport === 'wifi'
-      ? native.wifi!.exportAudio(file.sessionId)
-      : native.exportAudio(file.sessionId));
+    // A timeout/stop is not proof of cancellation. Nonterminal native failures
+    // retain the restart gate so another transfer cannot overlap SDK writes.
+    const result = await (
+      transport === 'wifi'
+        ? native.wifi!.exportAudio(file.sessionId)
+        : native.exportAudio(file.sessionId)
+    ).catch((error: unknown) => {
+      if (
+        requiresRecorderRestart(error) ||
+        (typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'ERR_PLAUD_CANCELLED')
+      ) {
+        nativeStillActive = true;
+        onStalled(true);
+        throw new TransferFailure(transferRestartMessage);
+      }
+      throw error;
+    });
     exported = true;
     clearTimeout(deadline!);
     outputPath = result.outputPath;
@@ -94,6 +112,6 @@ export async function receivePlaudAudio({
     clearTimeout(deadline!);
     subscription.remove();
     if (outputPath) await native.removeExport(outputPath).catch(() => undefined);
-    if (stalled) onStalled(false);
+    if (stalled && !nativeStillActive) onStalled(false);
   }
 }

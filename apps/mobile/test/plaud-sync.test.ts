@@ -538,3 +538,72 @@ it.each(['disconnect', 'stall'] as const)(
     await flush();
   },
 );
+
+it('keeps restart recovery after the native watchdog rejects without releasing its exporter', async () => {
+  const pending = deferred<{ sessionId: number; outputPath: string }>();
+  const test = fixture({
+    exportAudio: vi.fn(() => pending.promise),
+    controlRecorder: vi.fn(async () => {}),
+  });
+  test.controller.setConnection(context);
+  await flush();
+  await vi.advanceTimersByTimeAsync(2001);
+  pending.reject(
+    Object.assign(new Error('vendor details must not reach the UI'), {
+      code: 'ERR_PLAUD_EXPORT_STALLED',
+    }),
+  );
+  await flush();
+  expect(test.controller.getSnapshot()).toMatchObject({ restartRequired: true, busy: false });
+  expect(test.controller.getSnapshot().message).toContain('Close Aptly Able completely');
+  await test.controller.sync();
+  await test.controller.syncWifi();
+  await test.controller.control('start');
+  test.controller.setConnection(null);
+  test.controller.setConnection(context);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(test.native.exportAudio).toHaveBeenCalledTimes(1);
+  expect(test.native.controlRecorder).not.toHaveBeenCalled();
+  expect(test.saved.size).toBe(0);
+});
+
+it.each(['ERR_PLAUD_EXPORT_RESTART_REQUIRED', 'ERR_PLAUD_EXPORT_PENDING', 'ERR_PLAUD_CANCELLED'])(
+  'requires restart when native export rejects with %s before the JS inactivity timer',
+  async (code) => {
+    const test = fixture({
+      exportAudio: vi.fn(async () => {
+        throw Object.assign(new Error('private vendor details'), { code });
+      }),
+    });
+    test.controller.setConnection(context);
+    await flush();
+    expect(test.controller.getSnapshot()).toMatchObject({ restartRequired: true, busy: false });
+    expect(test.controller.getSnapshot().message).not.toContain('private vendor');
+    await test.controller.sync();
+    expect(test.native.exportAudio).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('retains restart recovery when Wi-Fi setup discovers an older native export lease', async () => {
+  const test = fixture({
+    getFileList: vi.fn(async () => test.emit('fileList', { files: [] })),
+    wifi: {
+      start: vi.fn(async () => {
+        throw Object.assign(new Error('vendor detail'), { code: 'ERR_PLAUD_EXPORT_PENDING' });
+      }),
+      stop: vi.fn(async () => {}),
+      exportAudio: vi.fn(),
+    },
+  });
+  test.controller.setConnection(context);
+  await test.controller.sync();
+  vi.mocked(test.native.getFileList).mockImplementation(async () =>
+    test.emit('fileList', { files: [file] }),
+  );
+  await test.controller.syncWifi();
+  expect(test.controller.getSnapshot()).toMatchObject({ restartRequired: true, busy: false });
+  expect(test.controller.getSnapshot().message).toContain('Close Aptly Able completely');
+  await test.controller.sync();
+  expect(test.native.exportAudio).not.toHaveBeenCalled();
+  expect(test.native.wifi!.exportAudio).not.toHaveBeenCalled();
+});

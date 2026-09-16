@@ -199,7 +199,7 @@ class PlaudSdkModule : Module() {
         // Replacing process-wide credentials while an old exporter is still running can
         // cross account boundaries. A JS timeout/disconnect does not prove it has stopped.
         if (PlaudExportGate.shared.isBusy()) {
-          call.reject("ERR_PLAUD_BUSY", "The previous transfer has not finished. Fully close and reopen the app before starting another recorder session.", null)
+          call.reject("ERR_PLAUD_EXPORT_PENDING", "The previous transfer has not finished. Fully close and reopen the app before starting another recorder session.", null)
           return@dispatch
         }
         // The SDK's Partner API (gen-key / sn-sign) hardcodes platform-jp and does *not*

@@ -3,7 +3,7 @@ import { sourceKey, type PlaudRecordingSource } from '../recordings/recording-mo
 import type { PlaudFilePort, PlaudRecordingFile, PlaudRecorderCommand } from './plaud-file-port';
 import { sendRecorderCommand } from './recorder-command';
 import { receivePlaudAudio, TransferFailure } from './plaud-audio-transfer';
-import { transferRestartMessage } from './transfer-recovery';
+import { transferRestartMessage, requiresRecorderRestart } from './transfer-recovery';
 import type { PlaudSyncSnapshot } from './plaud-sync-model';
 export type { PlaudSyncSnapshot } from './plaud-sync-model';
 
@@ -60,7 +60,7 @@ export function createPlaudSyncController({
   const alive = (own: number) => connected(own) && !cancelled;
   const schedule = (delay = refreshMs) => {
     clearTimeout(timer);
-    if (connection && !disposed && !cancelled)
+    if (connection && !disposed && !cancelled && !snapshot.restartRequired)
       timer = setTimeout(() => {
         void sync(snapshot.wifiQueued);
       }, delay);
@@ -219,6 +219,7 @@ export function createPlaudSyncController({
   }
   function sync(wifi = false): Promise<void> {
     if (!connection || !native.isAvailable || disposed) return Promise.resolve();
+    if (snapshot.restartRequired) return running ?? Promise.resolve();
     if (recording) {
       schedule();
       return Promise.resolve();
@@ -250,6 +251,11 @@ export function createPlaudSyncController({
     const own = generation;
     running = cycle(own, connection, wifi)
       .catch((error) => {
+        if (requiresRecorderRestart(error)) publish({ restartRequired: true, wifiQueued: false });
+        if (snapshot.restartRequired) {
+          publish({ phase: 'error', progress: null, message: transferRestartMessage });
+          return;
+        }
         if (alive(own) && recording) {
           publish({
             phase: 'recording',
@@ -274,7 +280,7 @@ export function createPlaudSyncController({
         if (wifi) await native.wifi!.stop().catch(() => undefined);
         running = null;
         publish({ busy: false });
-        if (own === generation && cancelled) {
+        if (own === generation && cancelled && !snapshot.restartRequired) {
           publish({
             phase: recording ? 'recording' : 'idle',
             progress: null,
@@ -292,6 +298,7 @@ export function createPlaudSyncController({
     return running;
   }
   async function receive(id: string, keep: boolean): Promise<boolean> {
+    if (snapshot.restartRequired) return false;
     const record = library.getSnapshot().recordings.find((item) => item.id === id);
     const source = record?.source;
     if (
@@ -470,7 +477,7 @@ export function createPlaudSyncController({
       void native.wifi?.stop().catch(() => undefined);
     },
     async control(command: PlaudRecorderCommand) {
-      if (!connection || running || !native.controlRecorder) return;
+      if (!connection || running || snapshot.restartRequired || !native.controlRecorder) return;
       const { activity, sessionId } = snapshot;
       const allowed =
         command === 'start'

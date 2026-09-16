@@ -34,7 +34,9 @@ internal class PlaudRecorderActions(
   fun hotspot(status: Int) = wifi.hotspot(status)
   fun stopWifi() = wifi.close()
   fun startWifi(serial: String, promise: Promise) {
-    if (PlaudExportGate.shared.isBusy() || recording != false) {
+    if (PlaudExportGate.shared.isBusy()) {
+      promise.reject("ERR_PLAUD_EXPORT_PENDING", "The previous transfer has not finished. Fully close and reopen the app.", null)
+    } else if (recording != false) {
       promise.reject("ERR_PLAUD_BUSY", "Finish recording or transferring before starting Wi-Fi.", null)
     } else wifi.start(serial, promise)
   }
@@ -54,7 +56,11 @@ internal class PlaudRecorderActions(
   }
 
   fun exportBle(id: Long, directory: File, format: AudioExportFormat, channels: Int, promise: Promise) {
-    if (!PlaudDeviceAgent.isConnected() || PlaudExportGate.shared.isBusy() || wifi.busy) {
+    if (PlaudExportGate.shared.isBusy()) {
+      promise.reject("ERR_PLAUD_EXPORT_PENDING", "The previous transfer has not finished. Fully close and reopen the app.", null)
+      return
+    }
+    if (!PlaudDeviceAgent.isConnected() || wifi.busy) {
       promise.reject("ERR_PLAUD_BUSY", "Connect the recorder and finish its previous transfer first.", null)
       return
     }
@@ -66,7 +72,7 @@ internal class PlaudRecorderActions(
     }
     val lease = PlaudExportGate.shared.acquire()
     if (lease == null) {
-      promise.reject("ERR_PLAUD_BUSY", "The previous transfer has not finished. Fully close and reopen the app if it stopped responding.", null)
+      promise.reject("ERR_PLAUD_EXPORT_PENDING", "The previous transfer has not finished. Fully close and reopen the app if it stopped responding.", null)
       return
     }
     val operation = PlaudExportOperation(main, promise, lease, id, directory, "Bluetooth", emit) { bleExport = null }

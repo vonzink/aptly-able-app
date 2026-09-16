@@ -28,7 +28,11 @@ internal class PlaudWifiTransfer(
   val busy: Boolean get() = active || opening != null || exporting != null
 
   fun start(deviceSerial: String, promise: Promise) {
-    if (busy || PlaudExportGate.shared.isBusy() || deviceSerial.isBlank() || !PlaudDeviceAgent.isConnected()) {
+    if (PlaudExportGate.shared.isBusy()) {
+      promise.reject("ERR_PLAUD_EXPORT_PENDING", "The previous transfer has not finished. Fully close and reopen the app.", null)
+      return
+    }
+    if (busy || deviceSerial.isBlank() || !PlaudDeviceAgent.isConnected()) {
       promise.reject("ERR_PLAUD_WIFI_BUSY", "Connect the recorder and finish its previous transfer first.", null)
       return
     }
@@ -83,7 +87,7 @@ internal class PlaudWifiTransfer(
     }
     val lease = PlaudExportGate.shared.acquire()
     if (lease == null) {
-      promise.reject("ERR_PLAUD_BUSY", "The previous transfer has not finished. Fully close and reopen the app if it stopped responding.", null)
+      promise.reject("ERR_PLAUD_EXPORT_PENDING", "The previous transfer has not finished. Fully close and reopen the app if it stopped responding.", null)
       return
     }
     val operation = PlaudExportOperation(main, promise, lease, sessionId, directory, "Wi-Fi", emit) { exporting = null }
