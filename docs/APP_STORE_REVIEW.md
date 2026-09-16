@@ -1,6 +1,6 @@
 # Store review preparation
 
-**Draft, not submitted.** Source is 0.1.0 build 6; no corresponding signed store build is verified. The chosen App Store listing name was AA FieldSense, while the app displays Aptly Able. Confirm final naming and asset rights before submitting metadata or screenshots.
+**Draft, not submitted.** Current source is 0.1.2 build 9. [Signed pilot test packages](verification/2026-09-16-build9-preparation.md), including an IPA prepared for TestFlight upload, have been verified locally. This is not Apple validation or store-profile approval; hardware and owner/vendor evidence remain pending. The chosen App Store listing name was AA FieldSense, while the app displays Aptly Able. Confirm final naming and asset rights before submitting metadata or screenshots.
 
 ## Intended store release
 

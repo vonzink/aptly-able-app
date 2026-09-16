@@ -1,6 +1,6 @@
 # Recording location
 
-This feature is implemented on the `codex/recording-location` branch. It requires a new native iPhone/Android build; updating the website alone cannot add it to an installed app. It has not been deployed or submitted to either store.
+This feature is implemented on the `codex/recording-location` branch. Signed **0.1.2 (9)** test packages are prepared; see the [build handoff](verification/2026-09-16-build9-preparation.md). Updating the website alone cannot add it to an installed app. These packages have not been installed on phones, published to the website or uploaded to either store.
 
 ## User flow
 
@@ -24,7 +24,7 @@ Turning the setting off stops future capture but does not erase saved locations.
 
 ## Release and acceptance
 
-The current release identifier remains 0.1.2 (8); the local unsigned verification archive is not an installable release. Increment the build number and prepare signed builds before the next distribution. Existing store-readiness gates remain in force.
+The prepared test release is **0.1.2 (9)**: a signed Android APK, a development-signed iPhone app/IPA for the registered phone, and an App Store distribution-signed IPA prepared for TestFlight upload. These are pilot-profile builds. Apple upload/processing, tester access and physical acceptance remain separate steps. Existing store-readiness gates remain in force.
 
 Real-device acceptance is still required on both platforms:
 

@@ -1,6 +1,6 @@
 # Recording-location implementation verification
 
-Branch: `codex/recording-location`, based on `main` at `1a20b06`. Changes are local and uncommitted. No server, website, APK download, TestFlight or installed phone app was updated in this pass.
+Initial implementation pass: `codex/recording-location`, based on `main` at `1a20b06`. Changes were local and uncommitted during that pass. No server, website, APK download, TestFlight or installed phone app was updated in that pass. The subsequent commit and signed build 9 preparation are recorded in [the build handoff](2026-09-16-build9-preparation.md); the build 8/unsigned observations below describe the initial verification only.
 
 ## Scope
 
