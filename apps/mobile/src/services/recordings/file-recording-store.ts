@@ -71,6 +71,20 @@ export function createFileRecordingStore({
     const record: unknown = JSON.parse(await files.readText(path(id, latest)));
     assertLocalRecording(record);
     if (record.id !== id) throw new Error('Saved recording information does not match its audio.');
+    if (record.location === null) {
+      // A previous removal may have committed the null marker before an older
+      // coordinate-bearing revision could be purged. Retry on every read, including
+      // after relaunch; keep audio usable and expose a retry state if still blocked.
+      let pending = false;
+      for (const name of versions.slice(0, -1)) {
+        try {
+          if (await files.exists(path(id, name))) await files.remove(path(id, name), false);
+        } catch {
+          pending = true;
+        }
+      }
+      record.locationRemovalPending = pending;
+    }
     return { record, revision: Number(latest.slice(9, 19)), versions };
   }
   const permanentPath = (record: LocalRecording) =>
@@ -136,14 +150,26 @@ export function createFileRecordingStore({
     const temporary = path(record.id, `.${nextName}.pending`);
     await cleanup(temporary, false);
     try {
-      const { audioAvailable: _availability, ...persisted } = record;
+      const {
+        audioAvailable: _availability,
+        locationRemovalPending: _locationRemovalPending,
+        ...persisted
+      } = record;
       await files.writeText(temporary, JSON.stringify(persisted));
       await files.move(temporary, path(record.id, nextName), false);
     } catch (error) {
       await cleanup(temporary, false);
       throw error;
     }
-    for (const name of previous.versions) await cleanup(path(record.id, name), false);
+    for (const name of previous.versions) {
+      // Explicit location removal must purge earlier coordinate-bearing revisions too.
+      // The new null marker is durable; a failed purge is reported and can be retried.
+      if (record.location === null) {
+        if (await files.exists(path(record.id, name)))
+          await files.remove(path(record.id, name), false);
+      } else await cleanup(path(record.id, name), false);
+    }
+    if (record.location === null) record.locationRemovalPending = false;
   }
   async function restore(id: string, input: AudioImport, keep: boolean) {
     const previous = await activeMetadata(id);

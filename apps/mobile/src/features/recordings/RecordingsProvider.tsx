@@ -1,3 +1,4 @@
+import { recordingLocation } from '../../services/recording-location';
 import * as Crypto from 'expo-crypto';
 import {
   createContext,
@@ -29,6 +30,7 @@ export function RecordingsProvider({
     () =>
       createRecordingsController({
         store: recordingStore,
+        locations: recordingLocation,
         createId: Crypto.randomUUID,
         now: () => new Date().toISOString(),
       }),

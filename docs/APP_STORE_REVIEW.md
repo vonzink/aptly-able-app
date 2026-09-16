@@ -6,7 +6,7 @@
 
 Native Plaud companion: create an account in-app or sign in, enroll an assigned recorder, Bluetooth connection/control, foreground audio transfer, supported Wi-Fi transfer, playback, titles/notes, local audio/transcript import, storage controls, unpair, privacy/support and account-deletion request.
 
-The `store` release profile excludes firmware promotion and cloud/automatic AI transcription. GPS tracking, automatic cloud backup and the separate browser dashboard demonstration are not part of this app release. A physical recorder and iPhone are needed to validate hardware features.
+The `store` release profile excludes firmware promotion and cloud/automatic AI transcription. Optional recording location is off by default in Settings and triggered by confirmed recording events from the connected Plaud. It stores phone coordinates locally; locked-screen starts require platform readiness and physical-device verification. Automatic cloud backup and the separate browser dashboard demonstration are not part of this app release. A physical recorder and iPhone are needed to validate hardware features.
 
 ## Fill in before App Store Connect review
 
@@ -36,3 +36,7 @@ Use a harmless, owned sample audio/transcript for local import tests without har
 Fresh install/enrollment; existing-account restore; wrong password and offline sign-in; Bluetooth allow/deny; device button starts recording; pause/stop; leave Recorder tab; disconnect while active; Wi-Fi allow/deny; interrupted transfer/cache recovery; local import/export/delete; unpair plus dashboard release; offline privacy/help; large text/VoiceOver/Reduce Motion; iPad layouts/orientation if tablet support remains; deletion wrong password/cancel/accept/restart/retry/isolation; actual server/provider/backup completion.
 
 Commands and artifact checks are in `verification/ios-store-packaging.md`. No push/deployment/signing/Apple submission is implied by this draft.
+
+## Recording location reviewer path
+
+Settings → Save location during recordings → read the disclosure and enable. On iOS, When In Use supports foreground starts; the separate “Allow starts while phone is locked” action requests Always permission. Connect the assigned physical Plaud and use its record button. Verify stop/pause/disconnect disables capture, then receive audio and inspect Recording location. Remove location keeps the audio. GPS data is local-only; an explicit Open in Maps action shares only the selected point with the selected mapping provider. Denial preserves recorder/audio use. Force-quit capture is unsupported. Native compilation is not hardware acceptance; `hardwareReviewVerified` remains false until the documented real-device matrix passes.

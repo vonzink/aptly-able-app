@@ -18,6 +18,7 @@ import expo.modules.kotlin.records.Record
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
+import com.tinnotech.penblesdk.TntAgent
 import com.tinnotech.penblesdk.entity.BleDevice
 import com.tinnotech.penblesdk.entity.BleFile
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,19 @@ class RecorderControlOptions : Record {
   @Field val command: String = ""
   @Field val sessionId: Long? = null
 }
+
+class RecordingLocationContextOptions : Record {
+  @Field val actorId: String? = null
+  @Field val serial: String? = null
+}
+class RecordingLocationEnabledOptions : Record { @Field val enabled: Boolean = false }
+class RecordingLocationSourceOptions : Record {
+  @Field val actorId: String = ""
+  @Field val serial: String = ""
+  @Field val sessionId: Long = -1
+  internal fun source() = RecordingLocationSource(actorId, serial, sessionId).also { it.validate() }
+}
+class ClearRecordingLocationOptions : Record { @Field val actorId: String = "" }
 
 private class PlaudSdkException(message: String, code: String = "ERR_PLAUD") :
   CodedException(code, message, null)
@@ -121,7 +135,31 @@ class PlaudSdkModule : Module() {
   private val scanEpoch = AtomicLong(0)
   private val connectionEpoch = AtomicLong(0)
   private val wifiEpoch = AtomicLong(0)
+  @Volatile private var recordingLocation: PlaudRecordingLocation? = null
   private val actions = PlaudRecorderActions(main) { event, body -> emit(event, body); Unit }
+
+  private fun locations(): PlaudRecordingLocation = recordingLocation ?: PlaudRecordingLocation(
+    context.applicationContext, { appContext.currentActivity }, { status ->
+      emit("recordingLocationChanged", bundleOf(*status.map { it.key to it.value }.toTypedArray()))
+    }
+  ).also { recordingLocation = it }
+
+  private fun locationRecordingEvent(sessionId: Long, action: String) {
+    val helper = recordingLocation ?: return
+    val event = helper.eventContext
+    val epoch = connectionEpoch.get()
+    main.post {
+      if (!destroyed && epoch == connectionEpoch.get() && event == helper.eventContext &&
+          event.serial != null && event.serial == connectedDevice?.serialNumber &&
+          runCatching { PlaudDeviceAgent.isConnected() }.getOrDefault(false)) {
+        // The documented low-level state read guards delayed resumes after a pause/stop.
+        // The high-level facade has no equivalent cached recording-state getter.
+        val stillRecording = action !in listOf("start", "resume") ||
+          runCatching { TntAgent.getInstant().bleAgent.isRecording }.getOrDefault(false)
+        if (stillRecording) helper.recording(event, sessionId, action)
+      }
+    }
+  }
 
   private fun invalidateConnection(): Long {
     wifiEpoch.incrementAndGet()
@@ -177,8 +215,60 @@ class PlaudSdkModule : Module() {
     Events(
       "scanResult", "scanTimeout", "connectState", "penState", "bind", "fileList",
       "exportProgress", "recordStart", "recordStop", "recordPause", "recordResume", "depair",
-      "batteryState", "storageState"
+      "batteryState", "storageState", "recordingLocationChanged"
     )
+
+    AsyncFunction("getRecordingLocationStatus") { promise: Promise ->
+      dispatchSdk(promise, "ERR_PLAUD_LOCATION", "Recording location status is unavailable.") { locations().status() }
+    }
+    AsyncFunction("setRecordingLocationContext") { options: RecordingLocationContextOptions, promise: Promise ->
+      dispatchSdk(promise, "ERR_PLAUD_LOCATION", "Recording location context could not be updated.") {
+        locations().setContext(options.actorId, options.serial); null
+      }
+    }
+    AsyncFunction("setRecordingLocationEnabled") { options: RecordingLocationEnabledOptions, promise: Promise ->
+      val call = pendingCalls.track(promise)
+      pendingCalls.dispatch(call, "ERR_PLAUD_LOCATION", "Recording location could not be updated.", { !destroyed }) {
+        val helper = locations()
+        if (!options.enabled) {
+          // Never request permissions before allowing disable, even after revocation.
+          call.resolve(helper.disable())
+        } else if (!helper.visible()) {
+          call.resolve(helper.status())
+        } else {
+          val permit = helper.beginEnable()
+          val required = mutableListOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+          if (Build.VERSION.SDK_INT >= 33) required.add(Manifest.permission.POST_NOTIFICATIONS)
+          val permissions = appContext.permissions
+          if (permissions == null) call.resolve(helper.completeEnable(permit))
+          else permissions.askForPermissions({ _ ->
+            pendingCalls.dispatch(call, "ERR_PLAUD_LOCATION", "Recording location permissions could not be applied.", { !destroyed }) {
+              // The helper accepts coarse OR fine. Its generation token rejects late grants.
+              call.resolve(helper.completeEnable(permit))
+            }
+          }, *required.toTypedArray())
+        }
+      }
+    }
+    AsyncFunction("requestRecordingLocationBackgroundPermission") { promise: Promise ->
+      dispatchSdk(promise, "ERR_PLAUD_LOCATION", "Recording location readiness is unavailable.") {
+        // Android uses a visible, explicitly armed foreground service; no background grant.
+        locations().refreshReadiness()
+      }
+    }
+    AsyncFunction("getRecordingLocation") { options: RecordingLocationSourceOptions, promise: Promise ->
+      dispatchSdk(promise, "ERR_PLAUD_LOCATION", "Recording location could not be read.") { locations().get(options.source()) }
+    }
+    AsyncFunction("removeRecordingLocation") { options: RecordingLocationSourceOptions, promise: Promise ->
+      dispatchSdk(promise, "ERR_PLAUD_LOCATION", "Recording location could not be removed. Retry removal.") {
+        locations().remove(options.source()); null
+      }
+    }
+    AsyncFunction("clearRecordingLocations") { options: ClearRecordingLocationOptions, promise: Promise ->
+      dispatchSdk(promise, "ERR_PLAUD_LOCATION", "Recording locations could not be removed. Retry removal.") {
+        locations().clear(options.actorId); null
+      }
+    }
 
     AsyncFunction("initSDK") { options: InitOptions, promise: Promise ->
       if (options.userAccessToken.isEmpty()) {
@@ -206,6 +296,7 @@ class PlaudSdkModule : Module() {
         // follow `customDomain`. Point it at the right host first, or a non-JP token 401s,
         // the RSA key fetch fails, and every device handshake fails after it.
         try {
+          recordingLocation?.sdkReset(options.userId)
           actions.reset()
           NiceBuildSdk.getPartnerApiManager().updateBaseUrl("https://${options.customDomain}")
           PlaudDeviceAgent.listener = listener
@@ -320,6 +411,7 @@ class PlaudSdkModule : Module() {
       invalidateConnection()
       invalidateScan()
       dispatchSdk(promise, "ERR_PLAUD_DISCONNECT", "The recorder could not be disconnected.") {
+        recordingLocation?.disconnect()
         actions.reset()
         PlaudDeviceAgent.disconnect()
         null
@@ -331,6 +423,7 @@ class PlaudSdkModule : Module() {
       invalidateScan()
       val clear = options?.clear ?: true
       dispatchSdk(promise, "ERR_PLAUD_DEPAIR", "Unpairing could not be started.") {
+        recordingLocation?.disconnect()
         actions.reset()
         PlaudDeviceAgent.depair(clear)
         null
@@ -432,6 +525,8 @@ class PlaudSdkModule : Module() {
       invalidateScan()
       pendingCalls.destroy()
       main.post {
+        recordingLocation?.shutdown()
+        recordingLocation = null
         actions.reset(stopSdk = PlaudDeviceAgent.listener === listener)
         // Do not detach or stop a newer module's process-wide SDK session.
         if (PlaudDeviceAgent.listener === listener) {
@@ -481,7 +576,7 @@ class PlaudSdkModule : Module() {
       if (state != 1) {
         connectedDevice = null
         wifiEpoch.incrementAndGet()
-        main.post { if (!destroyed) actions.reset() }
+        main.post { if (!destroyed) { recordingLocation?.disconnect(); actions.reset() } }
       }
       emit(
         "connectState",
@@ -503,7 +598,19 @@ class PlaudSdkModule : Module() {
         com.tinnotech.penblesdk.Constants.DeviceStatus.IDLE -> if (keyState == 0) "idle" else "unknown"
         else -> "unknown"
       }
-      main.post { if (!destroyed) actions.state(recordingState) }
+      val helper = recordingLocation
+      val locationEvent = helper?.eventContext
+      val epoch = connectionEpoch.get()
+      main.post {
+        if (!destroyed) {
+          if (recordingState == "idle" && helper != null && locationEvent != null &&
+              epoch == connectionEpoch.get() && locationEvent.serial == connectedDevice?.serialNumber &&
+              runCatching { !TntAgent.getInstant().bleAgent.isRecording }.getOrDefault(false)) {
+            helper.recorderIdle(locationEvent)
+          }
+          actions.state(recordingState)
+        }
+      }
       emit(
         "penState",
         bundleOf("state" to state, "privacy" to privacy, "keyState" to keyState, "uDisk" to uDisk,
@@ -515,7 +622,7 @@ class PlaudSdkModule : Module() {
       if (destroyed) return
       connectedDevice = null
       wifiEpoch.incrementAndGet()
-      main.post { if (!destroyed) actions.reset() }
+      main.post { if (!destroyed) { recordingLocation?.disconnect(); actions.reset() } }
       emit("depair", bundleOf("status" to status))
     }
 
@@ -537,7 +644,10 @@ class PlaudSdkModule : Module() {
     override fun bleRecordStart(
       sessionId: Long, start: Long, status: Int, scene: Int, startTime: Long, reason: Int
     ) {
-      if (status == 0) main.post { if (!destroyed) actions.recorded(sessionId) }
+      if (status == 0) {
+        locationRecordingEvent(sessionId, "start")
+        main.post { if (!destroyed) actions.recorded(sessionId) }
+      }
       emit(
         "recordStart",
         bundleOf(
@@ -548,11 +658,13 @@ class PlaudSdkModule : Module() {
     }
 
     override fun bleRecordStop(sessionId: Long, reason: Int, fileExist: Boolean, fileSize: Long) {
+      locationRecordingEvent(sessionId, "stop")
       main.post { if (!destroyed) actions.recorded(sessionId, stopped = true) }
       emit("recordStop", recordStopBundle(sessionId, reason, fileExist, fileSize))
     }
 
     override fun bleRecordPause(sessionId: Long, reason: Int, fileExist: Boolean, fileSize: Long) {
+      locationRecordingEvent(sessionId, "pause")
       main.post { if (!destroyed) actions.recorded(sessionId) }
       emit("recordPause", recordStopBundle(sessionId, reason, fileExist, fileSize))
     }
@@ -560,7 +672,10 @@ class PlaudSdkModule : Module() {
     override fun bleRecordResume(
       sessionId: Long, start: Long, status: Int, scene: Int, startTime: Long
     ) {
-      if (status == 0) main.post { if (!destroyed) actions.recorded(sessionId) }
+      if (status == 0) {
+        locationRecordingEvent(sessionId, "resume")
+        main.post { if (!destroyed) actions.recorded(sessionId) }
+      }
       emit(
         "recordResume",
         bundleOf(

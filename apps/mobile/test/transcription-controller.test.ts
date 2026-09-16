@@ -51,7 +51,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function setup(overrides: Partial<TranscriptionClient> = {}) {
+function setup(overrides: Partial<TranscriptionClient> = {}, recording = local) {
   const events: string[] = [];
   const bytes = new Blob(['test']);
   const client: TranscriptionClient = {
@@ -76,7 +76,7 @@ function setup(overrides: Partial<TranscriptionClient> = {}) {
   };
   const controller = createTranscriptionController({
     client,
-    recording: local,
+    recording,
     openAudio: async (recordingId) => {
       events.push(`open:${recordingId}`);
       return {
@@ -95,6 +95,38 @@ function setup(overrides: Partial<TranscriptionClient> = {}) {
 }
 afterEach(() => vi.useRealTimers());
 describe('transcription lifecycle', () => {
+  it('keeps recording coordinates and local notes out of server registration and audio upload', async () => {
+    const register = vi.fn<TranscriptionClient['register']>(async () => record);
+    const { controller, events } = setup(
+      { register },
+      {
+        ...local,
+        notes: 'Private local note',
+        location: {
+          version: 1,
+          sessionId: 42,
+          startedAt: 1_800_000_000_000,
+          endedAt: 1_800_000_060_000,
+          status: 'complete',
+          reason: null,
+          droppedPoints: 0,
+          points: [
+            { latitude: 39.7, longitude: -104.9, accuracy: 10, capturedAt: 1_800_000_001_000 },
+          ],
+        },
+      },
+    );
+    await controller.activate('actor-a');
+    await controller.generate();
+    expect(register.mock.calls[0]?.[0]).toEqual({
+      id,
+      title: local.title,
+      fileName: local.originalName,
+      sizeBytes: local.sizeBytes,
+    });
+    expect(events).toContain(`upload:${id}`);
+    controller.deactivate();
+  });
   it('restores completed server transcripts even when new transcription is not configured', async () => {
     const { controller, events } = setup({
       capabilities: async () => ({ available: false, provider: 'plaud', reason: 'not_configured' }),

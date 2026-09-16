@@ -62,6 +62,7 @@ export function createDeletionJournal(
  * unscoped manual imports are never selected for removal. An unreadable library is
  * explicitly incomplete, not successfully empty. */
 export async function removeAccountRecordings(library: RecordingsController, actorId: string) {
+  await library.clearAccountLocations(actorId);
   await library.reload();
   const snapshot = library.getSnapshot();
   if (!snapshot.readable || snapshot.error)
@@ -71,6 +72,9 @@ export async function removeAccountRecordings(library: RecordingsController, act
     if (recording.source?.actorId === actorId && !(await library.remove(recording.id)))
       failed = true;
   }
+  // Per-record removal/acknowledgement can create coordinate-free suppression
+  // markers; account cleanup removes those and the consent preference as well.
+  await library.clearAccountLocations(actorId);
   if (failed)
     throw new Error(
       'Some local files could not be removed. Retry local cleanup or contact support.',

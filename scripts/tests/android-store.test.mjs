@@ -21,6 +21,9 @@ const fixture = () => ({
     'uses-sdk': [{ $: { 'android:minSdkVersion': '24', 'android:targetSdkVersion': '36' } }],
     'uses-permission': [
       'INTERNET',
+      'FOREGROUND_SERVICE',
+      'FOREGROUND_SERVICE_LOCATION',
+      'POST_NOTIFICATIONS',
       'BLUETOOTH_SCAN',
       'BLUETOOTH_CONNECT',
       'ACCESS_FINE_LOCATION',
@@ -50,6 +53,15 @@ const fixture = () => ({
           'android:fullBackupContent': '@xml/aptly_backup_rules',
           'android:dataExtractionRules': '@xml/aptly_data_extraction_rules',
         },
+        service: [
+          {
+            $: {
+              'android:name': 'expo.modules.plaudsdk.PlaudRecordingLocationService',
+              'android:exported': 'false',
+              'android:foregroundServiceType': 'location',
+            },
+          },
+        ],
         'meta-data': Object.entries({
           'com.aptlyable.releaseChannel': 'store',
           'com.aptlyable.recorderMode': 'native',
@@ -185,4 +197,23 @@ test('signature exception accepts only self-signed trust errors, not invalid cer
     signatureAccepted({ status: 4, stdout: 'jar verified, with signer errors.' }),
     false,
   );
+});
+
+test('recording location service permits only the reviewed foreground permissions and stays private', () => {
+  const m = fixture();
+  for (const name of ['FOREGROUND_SERVICE', 'FOREGROUND_SERVICE_LOCATION', 'POST_NOTIFICATIONS']) {
+    m.manifest['uses-permission'].push({ $: { 'android:name': `android.permission.${name}` } });
+  }
+  m.manifest.application[0].service = [
+    {
+      $: {
+        'android:name': 'expo.modules.plaudsdk.PlaudRecordingLocationService',
+        'android:exported': 'false',
+        'android:foregroundServiceType': 'location',
+      },
+    },
+  ];
+  assert.deepEqual(check(m), []);
+  m.manifest.application[0].service[0].$['android:exported'] = 'true';
+  assert.ok(check(m).some((error) => error.includes('location service')));
 });

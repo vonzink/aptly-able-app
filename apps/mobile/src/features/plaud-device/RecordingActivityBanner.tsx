@@ -1,3 +1,4 @@
+import { useRecordingLocation } from '../recording-location/RecordingLocationProvider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -22,6 +23,7 @@ export function RecordingActivityBanner() {
   const enrollment = useEnrollmentSnapshot();
   const { snapshot: device } = usePlaudDevice();
   const { snapshot: sync } = usePlaudSync();
+  const { snapshot: location } = useRecordingLocation();
   const [state, setState] = useState<{
     memory: RecordingActivityMemory;
     banner: RecordingActivityBannerModel | null;
@@ -59,6 +61,11 @@ export function RecordingActivityBanner() {
       <View style={styles.words}>
         <Text style={[styles.label, { color: colors.ink }]}>{state.banner.label}</Text>
         <Text style={[styles.detail, { color: colors.inkSecondary }]}>{state.banner.detail}</Text>
+        {location.enabled ? (
+          <Text style={[styles.detail, { color: colors.inkSecondary }]}>
+            {location.capturing ? 'Location capture active' : 'Location is not being captured'}
+          </Text>
+        ) : null}
       </View>
       <Button label="Recorder controls" variant="text" onPress={() => router.push('/recorder')} />
     </View>

@@ -20,7 +20,9 @@ module.exports = function withPlaudIosTransfer(config) {
     result.modResults.AptlyPlaudWifiTransferEnabled = enabled;
     if (!enabled) {
       delete result.modResults.NSLocalNetworkUsageDescription;
-      delete result.modResults.NSLocationWhenInUseUsageDescription;
+      // Location also supports opt-in recording capture in Bluetooth-only builds.
+      if (!config.ios?.infoPlist?.NSLocationAlwaysAndWhenInUseUsageDescription)
+        delete result.modResults.NSLocationWhenInUseUsageDescription;
     }
     return result;
   });

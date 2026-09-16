@@ -1,4 +1,8 @@
 import {
+  readRecordingLocation,
+  type RecordingLocation,
+} from '../recording-location/location-model';
+import {
   createAssignmentRequestSchema,
   transcriptSegmentSchema,
   type TranscriptSegment,
@@ -40,10 +44,14 @@ export interface LocalRecording {
   transcript: ImportedTranscript | null;
   /** Optional for libraries saved before recording notes were introduced. */
   notes?: string;
+  /** null records an explicit removal; undefined is a recording without captured location. */
+  location?: RecordingLocation | null;
   source?: PlaudRecordingSource;
   retention?: 'temporary' | 'downloaded';
   /** Derived from the filesystem; the OS may have cleared temporary audio. */
   audioAvailable?: boolean;
+  /** Runtime-only: a durable removal marker exists but old metadata needs cleanup. */
+  locationRemovalPending?: boolean;
 }
 
 export interface AudioImport {
@@ -77,7 +85,7 @@ export interface RecordingStore {
 }
 
 export type RecordingPatch = Partial<
-  Pick<LocalRecording, 'title' | 'notes' | 'durationSeconds' | 'transcript'>
+  Pick<LocalRecording, 'title' | 'notes' | 'durationSeconds' | 'transcript' | 'location'>
 >;
 
 export function applyRecordingPatch(
@@ -86,7 +94,7 @@ export function applyRecordingPatch(
 ): LocalRecording {
   if (
     Object.keys(patch).some(
-      (key) => !['title', 'notes', 'durationSeconds', 'transcript'].includes(key),
+      (key) => !['title', 'notes', 'durationSeconds', 'transcript', 'location'].includes(key),
     )
   ) {
     throw new Error('Audio details cannot be changed by a metadata update.');
@@ -201,6 +209,13 @@ export function assertLocalRecording(value: unknown): asserts value is LocalReco
     ) {
       throw new Error('Saved recorder source is invalid.');
     }
+  }
+  if (value.location !== undefined && value.location !== null) {
+    if (
+      !isObject(value.source) ||
+      !readRecordingLocation(value.location, Number(value.source.sessionId))
+    )
+      throw new Error('Saved recording location is invalid.');
   }
   if (value.transcript !== null) {
     const transcript = value.transcript;

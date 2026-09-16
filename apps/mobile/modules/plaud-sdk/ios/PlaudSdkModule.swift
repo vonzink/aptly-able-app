@@ -36,6 +36,23 @@ struct RecorderControlOptions: Record {
   @Field var sessionId: Int?
 }
 
+struct RecordingLocationContextOptions: Record {
+  @Field var actorId: String?
+  @Field var serial: String?
+}
+struct RecordingLocationEnabledOptions: Record {
+  @Field var enabled: Bool = false
+}
+struct RecordingLocationSourceOptions: Record {
+  @Field var actorId: String = ""
+  @Field var serial: String = ""
+  @Field var sessionId: Int = -1
+  var source: PlaudLocationSource { .init(actorId: actorId, serial: serial, sessionId: sessionId) }
+}
+struct RecordingLocationClearOptions: Record {
+  @Field var actorId: String = ""
+}
+
 /// Expo module bridging Plaud's native iOS SDK. This is the RN counterpart of the
 /// Capacitor `PlaudSdk` plugin (PlaudSdkPlugin.swift). Expo's `Module` base class isn't
 /// `NSObject`-derived, so it can't itself conform to the `@objc PlaudDeviceAgentProtocol`;
@@ -71,7 +88,7 @@ public class PlaudSdkModule: Module {
     Events(
       "scanResult", "scanTimeout", "connectState", "penState", "bind", "fileList",
       "exportProgress", "recordStart", "recordStop", "recordPause", "recordResume", "depair",
-      "batteryState", "storageState"
+      "batteryState", "storageState", "recordingLocationChanged"
     )
 
     AsyncFunction("initSDK") { (options: InitOptions, promise: Promise) in
@@ -125,6 +142,27 @@ public class PlaudSdkModule: Module {
     AsyncFunction("controlRecorder") { (options: RecorderControlOptions, promise: Promise) in
       self.controller.controlRecorder(options, promise: promise)
     }
+    AsyncFunction("getRecordingLocationStatus") { (promise: Promise) in
+      self.controller.locationStatus(promise)
+    }
+    AsyncFunction("setRecordingLocationContext") { (options: RecordingLocationContextOptions, promise: Promise) in
+      self.controller.locationContext(options, promise)
+    }
+    AsyncFunction("setRecordingLocationEnabled") { (options: RecordingLocationEnabledOptions, promise: Promise) in
+      self.controller.locationEnabled(options.enabled, promise)
+    }
+    AsyncFunction("requestRecordingLocationBackgroundPermission") { (promise: Promise) in
+      self.controller.locationBackgroundPermission(promise)
+    }
+    AsyncFunction("getRecordingLocation") { (options: RecordingLocationSourceOptions, promise: Promise) in
+      self.controller.locationRead(options.source, promise)
+    }
+    AsyncFunction("removeRecordingLocation") { (options: RecordingLocationSourceOptions, promise: Promise) in
+      self.controller.locationRemove(options.source, promise)
+    }
+    AsyncFunction("clearRecordingLocations") { (options: RecordingLocationClearOptions, promise: Promise) in
+      self.controller.locationClear(options.actorId, promise)
+    }
     OnDestroy { self.controller.shutdown() }
   }
 }
@@ -152,6 +190,9 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
   private var isScanning = false
   private var scanEpoch = 0
   private lazy var wifi = PlaudWifiTransfer(emit: emit)
+  private lazy var recordingLocation = PlaudRecordingLocation { [weak self] status in
+    self?.emit("recordingLocationChanged", status)
+  }
 
   init(emit: @escaping (String, [String: Any?]) -> Void) {
     self.emit = emit
@@ -174,6 +215,7 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
       self.scanEpoch += 1
       self.isScanning = false
       self.wifi.close()
+      self.recordingLocation.sdkInitialized(userId: userId)
       self.userId = userId
       let agent = PlaudDeviceAgent.shared
       agent.delegate = self
@@ -234,6 +276,7 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
                        "Unknown device — scan first, then connect by uuid or serialNumber")
         return
       }
+      self.recordingLocation.invalidate()
       if let token = token, !token.isEmpty {
         PlaudDeviceAgent.shared.connectBleDevice(bleDevice: device, deviceToken: token)
       } else {
@@ -245,6 +288,7 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
 
   func disconnect(promise: Promise) {
     DispatchQueue.main.async {
+      self.recordingLocation.invalidate()
       self.wifi.close()
       self.scanEpoch += 1
       self.isScanning = false
@@ -256,6 +300,7 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
 
   func depair(_ options: DepairOptions, promise: Promise) {
     DispatchQueue.main.async {
+      self.recordingLocation.invalidate()
       self.wifi.close()
       self.scanEpoch += 1
       self.isScanning = false
@@ -315,6 +360,8 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
   }
   func shutdown() {
     DispatchQueue.main.async {
+      self.recordingLocation.invalidate()
+      try? self.recordingLocation.setContext(actorId: nil, serial: nil)
       self.scanEpoch += 1
       self.isScanning = false
       self.wifi.close()
@@ -412,13 +459,16 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
 
   func blePenState(state: Int, privacy: Int, keyState: Int, uDisk: Int,
                    findMyToken: Int, hasSndpKey: Int, deviceAccessToken: Int) {
-    let recordingState = PlaudDeviceAgent.shared.checkIsRecording()
-      ? "recording" : (keyState == 0 ? "idle" : "unknown")
-    emit("penState", [
-      "state": state, "privacy": privacy, "keyState": keyState, "uDisk": uDisk,
-      "recordingState": recordingState,
-      "findMyToken": findMyToken, "hasSndpKey": hasSndpKey, "deviceAccessToken": deviceAccessToken
-    ])
+    DispatchQueue.main.async {
+      let recordingState = PlaudDeviceAgent.shared.checkIsRecording()
+        ? "recording" : (keyState == 0 ? "idle" : "unknown")
+      if recordingState == "idle" { self.recordingLocation.recorderIdle() }
+      self.emit("penState", [
+        "state": state, "privacy": privacy, "keyState": keyState, "uDisk": uDisk,
+        "recordingState": recordingState,
+        "findMyToken": findMyToken, "hasSndpKey": hasSndpKey, "deviceAccessToken": deviceAccessToken
+      ])
+    }
   }
 
   func bleScanResult(bleDevices: [BleDevice]) {
@@ -444,12 +494,19 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
   func bleConnectState(state: Int) {
     // 1 = connected, 0 = disconnected, {2, -1, -2} = connection/handshake failure.
     let failed = (state == 2 || state == -1 || state == -2)
-    if state != 1 { DispatchQueue.main.async { self.wifi.close() } }
-    emit("connectState", ["connected": state == 1, "failed": failed, "state": state])
+    DispatchQueue.main.async {
+      if state != 1 { self.wifi.close() }
+      self.recordingLocation.connectionChanged(state == 1)
+      self.emit("connectState", ["connected": state == 1, "failed": failed, "state": state])
+    }
   }
 
   func bleBind(sn: String?, status: Int, protVersion: Int, timezone: Int) {
-    emit("bind", ["sn": sn, "status": status, "protVersion": protVersion])
+    DispatchQueue.main.async {
+      let matched = sn != nil && sn == PlaudDeviceAgent.shared.recentConnectDevice?.serialNumber
+      self.recordingLocation.bound(serial: sn, success: status == 0 && matched)
+      self.emit("bind", ["sn": sn, "status": status, "protVersion": protVersion])
+    }
   }
 
   func bleWiFiOpen(_ status: Int, _ wifiName: String, _ wholeName: String, _ wifiPass: String) {
@@ -460,33 +517,89 @@ private final class PlaudSdkController: NSObject, PlaudDeviceAgentProtocol {
 
   func bleRecordStart(sessionId: Int, start: Int, status: Int, scene: Int,
                       startTime: Int, reason: Int) {
-    emit("recordStart", [
-      "sessionId": sessionId, "start": start, "status": status,
-      "scene": scene, "startTime": startTime, "reason": reason
-    ])
+    let observedAt = Date().timeIntervalSince1970 * 1000
+    DispatchQueue.main.async {
+      if self.confirmedRecordingSession(sessionId, status: status) {
+        self.recordingLocation.start(sessionId: sessionId, resumed: false, observedAt: observedAt)
+      }
+      self.emit("recordStart", ["sessionId": sessionId, "start": start, "status": status,
+                              "scene": scene, "startTime": startTime, "reason": reason])
+    }
   }
 
   func bleRecordStop(sessionId: Int, reason: Int, fileExist: Bool, fileSize: Int) {
-    emit("recordStop", [
-      "sessionId": sessionId, "reason": reason, "fileExist": fileExist, "fileSize": fileSize
-    ])
+    let observedAt = Date().timeIntervalSince1970 * 1000
+    DispatchQueue.main.async {
+      self.recordingLocation.stop(sessionId: sessionId, observedAt: observedAt)
+      self.emit("recordStop", ["sessionId": sessionId, "reason": reason, "fileExist": fileExist, "fileSize": fileSize])
+    }
   }
 
   func bleRecordPause(sessionId: Int, reason: Int, fileExist: Bool, fileSize: Int) {
-    emit("recordPause", [
-      "sessionId": sessionId, "reason": reason, "fileExist": fileExist, "fileSize": fileSize
-    ])
+    let observedAt = Date().timeIntervalSince1970 * 1000
+    DispatchQueue.main.async {
+      self.recordingLocation.pause(sessionId: sessionId, observedAt: observedAt)
+      self.emit("recordPause", ["sessionId": sessionId, "reason": reason, "fileExist": fileExist, "fileSize": fileSize])
+    }
   }
 
   func bleRecordResume(sessionId: Int, start: Int, status: Int, scene: Int, startTime: Int) {
-    emit("recordResume", [
-      "sessionId": sessionId, "start": start, "status": status,
-      "scene": scene, "startTime": startTime
-    ])
+    let observedAt = Date().timeIntervalSince1970 * 1000
+    DispatchQueue.main.async {
+      if self.confirmedRecordingSession(sessionId, status: status) {
+        self.recordingLocation.start(sessionId: sessionId, resumed: true, observedAt: observedAt)
+      }
+      self.emit("recordResume", ["sessionId": sessionId, "start": start, "status": status,
+                               "scene": scene, "startTime": startTime])
+    }
+  }
+
+  private func confirmedRecordingSession(_ sessionId: Int, status: Int) -> Bool {
+    let agent = PlaudDeviceAgent.shared
+    return status == 0 && sessionId >= 0 && agent.isConnected() &&
+      agent.checkIsRecording() && agent.getCurrentSessionID() == sessionId
   }
 
   func bleDepair(_ status: Int) {
-    emit("depair", ["status": status])
+    DispatchQueue.main.async {
+      if status == 0 { self.recordingLocation.invalidate() }
+      self.emit("depair", ["status": status])
+    }
+  }
+
+  // Location errors are isolated from the recorder and audio transfer bridges.
+  func locationStatus(_ promise: Promise) {
+    DispatchQueue.main.async { promise.resolve(self.recordingLocation.status()) }
+  }
+  func locationContext(_ options: RecordingLocationContextOptions, _ promise: Promise) {
+    DispatchQueue.main.async {
+      do { try self.recordingLocation.setContext(actorId: options.actorId, serial: options.serial); promise.resolve(nil) }
+      catch { promise.reject("ERR_LOCATION_CONTEXT", "Recording location context is invalid.") }
+    }
+  }
+  func locationEnabled(_ enabled: Bool, _ promise: Promise) {
+    DispatchQueue.main.async { self.recordingLocation.setEnabled(enabled) { promise.resolve($0) } }
+  }
+  func locationBackgroundPermission(_ promise: Promise) {
+    DispatchQueue.main.async { self.recordingLocation.requestBackgroundPermission { promise.resolve($0) } }
+  }
+  func locationRead(_ source: PlaudLocationSource, _ promise: Promise) {
+    DispatchQueue.main.async {
+      do { promise.resolve(try self.recordingLocation.read(source)) }
+      catch { promise.reject("ERR_LOCATION_STORAGE", "Recording location could not be read.") }
+    }
+  }
+  func locationRemove(_ source: PlaudLocationSource, _ promise: Promise) {
+    DispatchQueue.main.async {
+      do { try self.recordingLocation.remove(source); promise.resolve(nil) }
+      catch { promise.reject("ERR_LOCATION_STORAGE", "Recording location could not be removed.") }
+    }
+  }
+  func locationClear(_ actorId: String, _ promise: Promise) {
+    DispatchQueue.main.async {
+      do { try self.recordingLocation.clear(actorId: actorId); promise.resolve(nil) }
+      catch { promise.reject("ERR_LOCATION_STORAGE", "Recording locations could not be cleared.") }
+    }
   }
 
   func bleFileList(bleFiles: [BleFile]) {

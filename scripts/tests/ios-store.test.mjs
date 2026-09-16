@@ -41,6 +41,9 @@ test(
         AptlyRecorderMode: 'native',
         AptlyAPIOrigin: env.EXPO_PUBLIC_API_URL,
         AptlyPlaudWifiTransferEnabled: false,
+        NSLocationWhenInUseUsageDescription: 'Save location during recordings you enable.',
+        NSLocationAlwaysAndWhenInUseUsageDescription: 'Save recording location when locked.',
+        UIBackgroundModes: ['bluetooth-central', 'location'],
       };
       const run = (extra = {}) =>
         inspectApp({
@@ -73,6 +76,18 @@ test(
         );
       assert.ok(!run({ unsigned: true }).errors.some((e) => e.includes('Missing supplied')));
       assert.deepEqual(run({ unsigned: true }).errors, []);
+      for (const key of [
+        'NSLocationWhenInUseUsageDescription',
+        'NSLocationAlwaysAndWhenInUseUsageDescription',
+      ]) {
+        const saved = info[key];
+        delete info[key];
+        assert.ok(run({ unsigned: true }).errors.some((e) => e.includes(key)));
+        info[key] = saved;
+      }
+      info.UIBackgroundModes = ['bluetooth-central'];
+      assert.ok(run({ unsigned: true }).errors.some((e) => e.includes('location background')));
+      info.UIBackgroundModes.push('location');
       info.AptlyReleaseChannel = 'pilot';
       assert.ok(run({ unsigned: true }).errors.some((e) => e.includes('stale')));
     } finally {

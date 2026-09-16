@@ -70,13 +70,15 @@ const config: ExpoConfig = {
         ? {
             NSLocalNetworkUsageDescription:
               'Aptly Able connects to your Plaud recorder over Wi-Fi to receive recordings faster.',
-            NSLocationWhenInUseUsageDescription:
-              'Aptly Able uses this permission to identify your recorder’s Wi-Fi connection.',
           }
         : {}),
+      NSLocationWhenInUseUsageDescription:
+        'If you enable recording location, Aptly Able saves your phone’s location while your connected Plaud records. Location may also identify your recorder’s Wi-Fi connection.',
+      NSLocationAlwaysAndWhenInUseUsageDescription:
+        'Allow recording location to start when you press your connected Plaud’s record button while your phone is locked. Location is saved on this phone only during recordings.',
       NSBluetoothAlwaysUsageDescription:
         'Aptly Able uses Bluetooth to connect to and control your assigned Plaud recorder and receive recordings.',
-      UIBackgroundModes: ['bluetooth-central'],
+      UIBackgroundModes: ['bluetooth-central', 'location'],
     },
   },
   android: {

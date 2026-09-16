@@ -1,3 +1,4 @@
+import { RecordingLocationProvider } from '../features/recording-location/RecordingLocationProvider';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
@@ -205,17 +206,25 @@ export function AppProviders({ children }: { children: ReactNode }) {
               <RecorderContext.Provider value={controller}>
                 <TranscriptionContext.Provider value={clients.transcription}>
                   <PlaudDeviceContext.Provider value={plaudController}>
-                    <RecordingsProvider enrollment={enrollmentController}>
-                      <PlaudSyncProvider device={plaudController} enrollment={enrollmentController}>
-                        <SessionRestoration
-                          state={sessionState}
-                          onRetry={() => void enrollmentController.restoreSession()}
-                          onSignOut={() => void enrollmentController.signOut()}
+                    <RecordingLocationProvider
+                      device={plaudController}
+                      enrollment={enrollmentController}
+                    >
+                      <RecordingsProvider enrollment={enrollmentController}>
+                        <PlaudSyncProvider
+                          device={plaudController}
+                          enrollment={enrollmentController}
                         >
-                          {children}
-                        </SessionRestoration>
-                      </PlaudSyncProvider>
-                    </RecordingsProvider>
+                          <SessionRestoration
+                            state={sessionState}
+                            onRetry={() => void enrollmentController.restoreSession()}
+                            onSignOut={() => void enrollmentController.signOut()}
+                          >
+                            {children}
+                          </SessionRestoration>
+                        </PlaudSyncProvider>
+                      </RecordingsProvider>
+                    </RecordingLocationProvider>
                   </PlaudDeviceContext.Provider>
                 </TranscriptionContext.Provider>
               </RecorderContext.Provider>

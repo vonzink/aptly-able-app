@@ -1,3 +1,5 @@
+import type { LocationContext, LocationSource, LocationStatus } from '../../../src/features/recording-location/location-port';
+import type { RecordingLocation } from '../../../src/features/recording-location/location-model';
 import type { NativeModule } from 'expo-modules-core';
 
 /** A device surfaced by the SDK's `bleScanResult` callback. */
@@ -97,6 +99,7 @@ export type PlaudAudioFormat = 'pcm' | 'mp3' | 'wav' | 'opus';
 
 /** Event name → listener signature. Consumed by `PlaudSdk.addListener(name, cb)`. */
 export type PlaudSdkEvents = {
+  recordingLocationChanged: (data: LocationStatus) => void;
   scanResult: (data: PlaudScanResult) => void;
   scanTimeout: (data: { reason?: string }) => void;
   connectState: (data: PlaudConnectState) => void;
@@ -124,6 +127,13 @@ export type PlaudSdkEvents = {
  * linked (web, iOS simulator) every call rejects — guard with `PlaudSdk.isAvailable`.
  */
 export declare class PlaudSdkModule extends NativeModule<PlaudSdkEvents> {
+  getRecordingLocationStatus?(): Promise<LocationStatus>;
+  setRecordingLocationContext?(context: LocationContext): Promise<void>;
+  setRecordingLocationEnabled?(options: { enabled: boolean }): Promise<LocationStatus>;
+  requestRecordingLocationBackgroundPermission?(): Promise<LocationStatus>;
+  getRecordingLocation?(source: LocationSource): Promise<RecordingLocation | null>;
+  removeRecordingLocation?(source: LocationSource): Promise<void>;
+  clearRecordingLocations?(options: { actorId: string }): Promise<void>;
   /**
    * Initialise the SDK with a per-user JWT. `customDomain` is domain-only (no https://).
    * `userId` is the app-level identifier reused as the default connect `deviceToken`.

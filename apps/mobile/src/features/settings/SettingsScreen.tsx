@@ -1,3 +1,4 @@
+import { RecordingLocationSettings } from '../recording-location/RecordingLocationSettings';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -34,6 +35,8 @@ export default function SettingsScreen() {
         />
       </Card>
       <SettingsFirmwareCard />
+      <SectionLabel>RECORDING LOCATION</SectionLabel>
+      <RecordingLocationSettings />
       <SectionLabel>PRIVACY & HELP</SectionLabel>
       <Card style={local.enrollment}>
         <Button

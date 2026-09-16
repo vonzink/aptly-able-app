@@ -1,3 +1,5 @@
+import { readRecordingLocation } from '../recording-location/location-model';
+import type { RecordingLocationArchive } from '../recording-location/location-port';
 import {
   assertLocalRecording,
   validateAudioImport,
@@ -35,6 +37,8 @@ export interface RecordingsController {
   rename(id: string, title: string): Promise<boolean>;
   saveDetails(id: string, details: { title: string; notes: string }): Promise<boolean>;
   remove(id: string): Promise<boolean>;
+  removeLocation(id: string): Promise<boolean>;
+  clearAccountLocations(actorId: string): Promise<void>;
   attachTranscript(id: string, fileName: string, text: string): Promise<boolean>;
   setDuration(id: string, seconds: number): Promise<void>;
   clearError(): void;
@@ -44,10 +48,12 @@ export function createRecordingsController({
   store,
   createId,
   now,
+  locations,
 }: {
   store: RecordingStore;
   createId: () => string;
   now: () => string;
+  locations?: RecordingLocationArchive;
 }): RecordingsController {
   let snapshot: RecordingsSnapshot = {
     recordings: [],
@@ -132,6 +138,11 @@ export function createRecordingsController({
         publish({ loading: true });
         try {
           await refreshLibrary();
+          // Import order need not match capture order: newer offline imports must
+          // not strand an older recording whose metadata write failed.
+          if (locations) {
+            for (const record of snapshot.recordings) await attachLocation(record);
+          }
           initialized = true;
         } finally {
           publish({ loading: false });
@@ -140,6 +151,27 @@ export function createRecordingsController({
       undefined,
       "Couldn't load your local recordings. Try again.",
     );
+  }
+
+  async function attachLocation(record: LocalRecording) {
+    if (!record.source || !locations) return;
+    // Only completed audio enters this path: Plaud sync verifies idle (including
+    // not paused) and an unchanged session revision before committing the export.
+    // "interrupted" describes GPS coverage, not recorder terminality; a recorder
+    // stopped while disconnected legitimately has no native final-stop callback.
+    // The audio is already durable. Coordinate failure must never invalidate it.
+    try {
+      const pending = await locations.read(record.source);
+      if (!pending) return;
+      if (record.location === undefined) {
+        const captured = readRecordingLocation(pending, record.source.sessionId);
+        if (!captured || !['complete', 'interrupted'].includes(captured.status)) return;
+        await update(record.id, { location: captured });
+      }
+      await locations.remove(record.source);
+    } catch {
+      // Keep pending data for a later import/reload; explicit removal has a visible failure path.
+    }
   }
 
   function importAudio(input: AudioImport, source?: PlaudRecordingSource) {
@@ -154,7 +186,10 @@ export function createRecordingsController({
           const existing = snapshot.recordings.find(
             (record) => record.source && sourceKey(record.source) === sourceKey(source),
           );
-          if (existing) return existing.id;
+          if (existing) {
+            await attachLocation(existing);
+            return existing.id;
+          }
           if (snapshot.unavailableCount > 0)
             throw new Error(
               'Some saved recordings could not be read. Refresh your library before receiving new recordings.',
@@ -174,8 +209,10 @@ export function createRecordingsController({
         };
         assertLocalRecording(record);
         await store.saveAudio(record, input);
-        if (source) await refreshLibrary();
-        else publish({ recordings: [record, ...snapshot.recordings] });
+        if (source) {
+          await refreshLibrary();
+          await attachLocation(record);
+        } else publish({ recordings: [record, ...snapshot.recordings] });
         return record.id;
       },
       null,
@@ -266,7 +303,8 @@ export function createRecordingsController({
     remove(id) {
       return run(
         async () => {
-          find(id);
+          const record = find(id);
+          if (record.source) await locations?.remove(record.source);
           await store.remove(id);
           publish({ recordings: snapshot.recordings.filter((record) => record.id !== id) });
           return true;
@@ -275,6 +313,18 @@ export function createRecordingsController({
         "Couldn't remove this recording. Try again.",
       );
     },
+    removeLocation(id) {
+      return run(
+        async () => {
+          const record = find(id);
+          if (record.source) await locations?.remove(record.source);
+          return update(id, { location: null });
+        },
+        false,
+        "Couldn't remove this location. Try again.",
+      );
+    },
+    clearAccountLocations: (actorId) => locations?.clearActor(actorId) ?? Promise.resolve(),
     attachTranscript(id, fileName, source) {
       return run(
         () =>

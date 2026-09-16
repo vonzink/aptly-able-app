@@ -1,3 +1,4 @@
+import { RecordingLocationCard } from '../recording-location/RecordingLocationCard';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text } from 'react-native';
@@ -200,6 +201,7 @@ function RecordingDetail({ id }: { id: string }) {
           ) : null}
         </Card>
       ) : null}
+      <RecordingLocationCard recording={recording} />
       <Text style={[styles.footnote, { color: colors.inkSecondary }]}>
         Original file: {recording.originalName}
         {'\n'}
@@ -228,7 +230,7 @@ function RecordingDetail({ id }: { id: string }) {
       <ConfirmationDialog
         visible={confirmRemove}
         title="Delete from the app?"
-        description={`This deletes “${recording.title}”, its Aptly Able audio copy on this phone, and its local transcript and notes. Source files and copies outside the app stay where they are. This release has no Aptly Able server copy to delete.`}
+        description={`This deletes “${recording.title}”, its Aptly Able audio copy on this phone, and its local transcript, notes and locations. Source files and copies outside the app stay where they are. This release has no Aptly Able server copy to delete.`}
         confirmLabel="Delete recording"
         cancelLabel="Keep recording"
         loading={removing}

@@ -143,6 +143,7 @@ describe('account deletion workflow', () => {
 describe('local account cleanup', () => {
   function library(unavailableCount = 0) {
     return {
+      clearAccountLocations: vi.fn(async (_actorId: string) => {}),
       reload: vi.fn(async () => {}),
       getSnapshot: () => ({
         readable: true,
@@ -161,6 +162,7 @@ describe('local account cleanup', () => {
     const fake = library();
     await removeAccountRecordings(fake as unknown as RecordingsController, 'alice');
     expect(fake.remove.mock.calls).toEqual([['a']]);
+    expect(fake.clearAccountLocations).toHaveBeenCalledWith('alice');
   });
   it('does not claim completion with unreadable library entries', async () => {
     const fake = library(1);

@@ -27,11 +27,11 @@ export const accountDeletionRequest = {
 export const androidRecorderDisclosure = {
   title: 'Before searching for your recorder',
   description:
-    'The Plaud SDK needs Bluetooth / Nearby devices and both precise and approximate location access to find and connect your recorder on Android, including Android 12 and later. When Android asks, enable Precise location; approximate-only access cannot complete setup.\n\nAptly Able does not track your position on a map. Your account identifier and recorder details are shared with Plaud for the connection. The SDK may also keep local diagnostic logs; its full data collection and retention have not yet been verified with Plaud.\n\nYou can decline and keep using your local recordings. Continue only if you agree to this access for recorder setup.',
+    'The Plaud SDK needs Bluetooth / Nearby devices and both precise and approximate location access to find and connect your recorder on Android, including Android 12 and later. When Android asks, enable Precise location; approximate-only access cannot complete setup.\n\nThis setup permission does not turn on recording-location capture. That optional feature has a separate switch and explanation in Settings. Your account identifier and recorder details are shared with Plaud for the connection. The SDK may also keep local diagnostic logs; its full data collection and retention have not yet been verified with Plaud.\n\nYou can decline and keep using your local recordings. Continue only if you agree to this access for recorder setup.',
 } as const;
 
 export const appDataNotice = {
-  updatedAt: 'September 15, 2026',
+  updatedAt: 'September 16, 2026',
   title: 'Privacy & your recordings',
   introduction: 'Understand where your recordings go and how to manage your information.',
   sections: [
@@ -39,15 +39,24 @@ export const appDataNotice = {
       title: 'Your account and recorder',
       paragraphs: [
         'Aptly Able uses your account information and assigned recorder’s model and serial number to sign you in and connect the correct device. Our server shares an account identifier and recorder details with Plaud to authenticate and manage that connection.',
-        'Bluetooth connects and controls the recorder. Optional Wi-Fi transfer uses the recorder’s local network. On Android, the Plaud SDK requires Bluetooth / Nearby devices and both precise and approximate location access for recorder discovery and connection, including on Android 12 and later. Approximate-only location access cannot complete setup. You can decline and keep using the local library. Aptly Able does not track your position on a map. On iPhone, the Plaud SDK may request location access to identify the recorder’s Wi-Fi connection; the app does not provide recording-location tracking.',
+        'Bluetooth connects and controls the recorder. Optional Wi-Fi transfer uses the recorder’s local network. On Android, the Plaud SDK requires Bluetooth / Nearby devices and both precise and approximate location access for recorder discovery and connection, including on Android 12 and later. Approximate-only location access cannot complete setup. You can decline and keep using the local library. This setup permission does not turn on recording-location capture. That optional feature has a separate switch and explanation in Settings. On iPhone, the Plaud SDK may request location access to identify the recorder’s Wi-Fi connection; recording-location capture is a separate opt-in feature.',
       ],
     },
     {
       title: 'Audio, notes and transcripts on this phone',
       paragraphs: [
         'Your Plaud recorder captures the audio. This app does not record with the phone’s microphone. You can use your phone keyboard’s dictation feature to write notes.',
-        'Received audio uses a temporary cache that can be cleared to save space. Choose Keep offline in app to retain a copy. Your recording titles, notes and imported transcripts are stored with the local library. Android app data is excluded from automatic cloud backup and device-to-device transfer. Export audio you want to keep elsewhere before removing the app or changing phones. On iPhone, copies kept in the app may be included in your device backups, depending on your device settings.',
+        'Received audio uses a temporary cache that can be cleared to save space. Choose Keep offline in app to retain a copy. Your recording titles, notes and imported transcripts are stored with the local library. Android app data is excluded from automatic cloud backup and device-to-device transfer. Export audio you want to keep elsewhere before removing the app or changing phones. On iPhone, older copies may exist in backups made before recording-location protection was added; those earlier backups are not modified by the app.',
         'Files you import are available on this device even when you sign out. Recorder downloads are shown for the account that received them. Removing the app removes its local library, but does not delete originals on your recorder, files saved elsewhere, or server copies.',
+      ],
+    },
+    {
+      title: 'Optional recording location',
+      paragraphs: [
+        'Save location during recordings is off by default and enabled separately for each account on this phone. If enabled, the phone saves timestamped coordinates and accuracy while a connected Plaud confirms recording. Capture stops when recording stops or pauses, Bluetooth disconnects, you sign out, or you disable the feature. Turning it off does not remove locations already saved.',
+        'With the required permissions and background support ready, capture can start from the Plaud record button while the phone is locked. iPhone needs Always location permission for background starts. Android displays an ongoing foreground-service notification while armed. Reopening and reconnecting may be required after the app closes; force-closing the app or losing the connection can leave location unavailable. Old recordings cannot be located from where they are later imported.',
+        'Location is stored on this phone and is not uploaded to Aptly Able or Plaud for this feature. Pending location samples are kept for up to 30 days or 100 sessions, then removed; locations attached to your library remain until you remove the location, delete the recording, or complete local account cleanup. Samples are limited to 600 per session. Pending location storage is excluded from device backup. On iPhone, the local recording-library folder is also excluded from backup once the location feature initializes, to protect coordinates saved with recordings.',
+        'Open in Maps sends the selected coordinates to Apple Maps or Google Maps only when you choose that action. Audio and notes are not shared by that action. Location is not included in exported audio or transcription uploads. Remove location on a recording deletes its stored coordinates while keeping audio and notes.',
       ],
     },
     {
@@ -66,7 +75,7 @@ export const appDataNotice = {
     {
       title: 'Deletion and retained copies',
       paragraphs: [
-        'Delete from app removes that recording’s local audio, notes and imported transcript. The recorder’s original and files saved outside the app remain. Local deletion does not delete audio or transcripts previously uploaded to a server.',
+        'Delete from app removes that recording’s local audio, notes, imported transcript and saved locations. The recorder’s original and files saved outside the app remain. Local deletion does not delete audio or transcripts previously uploaded to a server.',
         'Use Settings → Delete account to request removal of your account and associated service data. The request signs you out and prevents further account use while cleanup proceeds. The app provides a reference, due date and a Check deletion status action that works after sign-out. Completion is shown only after all required cleanup is confirmed. If the date passes, the request stays open and the app reports the delay.',
         ...accountDeletionRequest.paragraphs,
         'Keep the device nearby to unpair it first when possible, but you can request account deletion without it.',

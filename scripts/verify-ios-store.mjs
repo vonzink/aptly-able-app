@@ -52,6 +52,14 @@ export function inspectApp({
     errors.push('Archived Wi-Fi transfer flag differs from selected profile.');
   if ('NSFaceIDUsageDescription' in info)
     errors.push('Unused NSFaceIDUsageDescription is still bundled; regenerate native config.');
+  for (const key of [
+    'NSLocationWhenInUseUsageDescription',
+    'NSLocationAlwaysAndWhenInUseUsageDescription',
+  ])
+    if (typeof info[key] !== 'string' || !info[key].trim())
+      errors.push(`Missing ${key} for optional recording location; regenerate native config.`);
+  if (!Array.isArray(info.UIBackgroundModes) || !info.UIBackgroundModes.includes('location'))
+    errors.push('Recording location background mode is missing; regenerate native config.');
   if (
     !existsSync(join(app, 'main.jsbundle')) ||
     !readFileSync(join(app, 'main.jsbundle')).includes(origin)

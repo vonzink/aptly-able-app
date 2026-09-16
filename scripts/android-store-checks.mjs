@@ -3,6 +3,9 @@ import { Buffer } from 'node:buffer';
 const allowedPermissions = new Set(
   [
     'INTERNET',
+    'FOREGROUND_SERVICE',
+    'FOREGROUND_SERVICE_LOCATION',
+    'POST_NOTIFICATIONS',
     'MODIFY_AUDIO_SETTINGS',
     'VIBRATE',
     'ACCESS_WIFI_STATE',
@@ -80,6 +83,9 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
   }
   const requiredCoverage = {
     INTERNET: [24, Infinity],
+    FOREGROUND_SERVICE: [28, Infinity],
+    FOREGROUND_SERVICE_LOCATION: [34, Infinity],
+    POST_NOTIFICATIONS: [33, Infinity],
     BLUETOOTH: [24, 30],
     BLUETOOTH_ADMIN: [24, 30],
     BLUETOOTH_SCAN: [31, Infinity],
@@ -103,6 +109,15 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
     )
       errors.push(`SDK-required permission does not cover supported Android versions: ${name}`);
   }
+  const locationService = (app.service ?? []).find(
+    (row) => row.$?.['android:name'] === 'expo.modules.plaudsdk.PlaudRecordingLocationService',
+  );
+  if (
+    !locationService ||
+    locationService.$['android:exported'] !== 'false' ||
+    locationService.$['android:foregroundServiceType'] !== 'location'
+  )
+    errors.push('Recording location service must be present, private, and location-only.');
   const metadata = Object.fromEntries(
     (app['meta-data'] ?? []).map((row) => [row.$?.['android:name'], row.$?.['android:value']]),
   );
