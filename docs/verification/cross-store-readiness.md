@@ -4,6 +4,9 @@ Date: 2026-09-15. Baseline: `eed0214`; implementation branch: `codex/cross-store
 
 This record covers the shared app, platform-specific packaging and account-deletion operations. It is not an approval certificate. Nothing in this pass uploads to either store, deploys services, replaces signing keys or updates installed phones.
 
+The subsequent [recovery and temporary-file cleanup pass](cross-store-recovery-cleanup.md)
+adds fixes and newer build evidence. Its results supersede the initial candidate below.
+
 ## Implemented in this pass
 
 - Android recorder setup explains Nearby devices/Bluetooth and precise + approximate location before SDK initialization/scan. Declining retains local library use. Denied access provides Settings recovery. Consent is scoped to the current enrollment; iOS retains its existing flow.
@@ -32,7 +35,7 @@ pnpm android:store --execute            # requires reviewed readiness evidence
 pnpm android:store:verify /absolute/path/app-release.aab
 ```
 
-Commands do not generate signing keys, provision accounts, upload, or bypass vendor/readiness findings. Verification checks identity/version, explicit profile markers, target SDK, permission allowlist, backup resource references, signature/fingerprint, native bundle alignment and every ELF LOAD segment, production JS origin and accidental key/env packaging. RELRO warnings require toolchain/device investigation; ZIP alignment alone does not prove device compatibility. Review newly resolved Maven dependencies and re-run advisory analysis when upgrading; a JavaScript-only audit is insufficient.
+Commands do not generate signing keys, provision accounts, upload, or bypass vendor/readiness findings. Verification checks identity/version, explicit profile markers, target SDK, permission allowlist, backup resource references and decoded contents (including qualified variants), signature/fingerprint, native bundle alignment and every ELF LOAD segment, production JS origin and accidental key/env packaging. RELRO warnings require toolchain/device investigation; ZIP alignment alone does not prove device compatibility. Review newly resolved Maven dependencies and re-run advisory analysis when upgrading; a JavaScript-only audit is insufficient.
 
 Use existing `pnpm ios:store` and `pnpm ios:store:verify` for Apple. Do not mark Apple privacy/signing evidence complete because an Android bundle builds. Increment `release.json` before the next distributed build; current version remains 0.1.2/build 7 during this local verification.
 
@@ -63,12 +66,13 @@ This text is a draft request; no message has been sent.
 
 - [Plaud Android SDK and permission contract](https://docs.plaud.ai/plaud-embedded/android-sdk)
 - [Google native page-size compatibility](https://developer.android.com/guide/practices/page-sizes)
+- [Google backup and device-transfer exclusions](https://developer.android.com/identity/data/autobackup)
 - [Apache Commons IO security](https://commons.apache.org/proper/commons-io/security.html)
 - [Bouncy Castle release source](https://github.com/bcgit/bc-java)
 - [Google Conscrypt](https://github.com/google/conscrypt)
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 
-## Verification results
+## Initial verification results (before the follow-up)
 
 - Shared unit tests: **513 passed**; typechecking and ESLint/import boundaries passed.
 - PostgreSQL integration tests: **53 passed** across 9 files using isolated schemas, including operator CLI and evidence retry behavior.

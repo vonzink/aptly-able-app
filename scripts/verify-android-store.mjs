@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import process from 'node:process';
 import console from 'node:console';
 import { validateStoreEnvironment, readinessErrors } from './ios-store-config.mjs';
+import { inspectAndroidBackupResources } from './android-backup-checks.mjs';
 import {
   inspectAndroidManifest,
   inspectElf,
@@ -67,6 +68,15 @@ export async function verifyAndroidBundle(bundle, env = process.env) {
         versionCode: release.buildNumber,
       }),
     );
+    const backupResources = JSON.parse(
+      run('java', [
+        '-cp',
+        tool,
+        resolve(root, 'scripts/java/ReadBundleBackupRules.java'),
+        bundle,
+      ]).toString(),
+    );
+    errors.push(...inspectAndroidBackupResources(backupResources));
     const signature = spawnSync(
       'jarsigner',
       ['-J-Duser.language=en', '-verify', '-strict', bundle],

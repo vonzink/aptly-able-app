@@ -46,6 +46,10 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
     errors.push('Global cleartext traffic must not be enabled.');
   if (attrs['android:allowBackup'] !== 'false')
     errors.push('Automatic backup must be disabled for SDK authentication data.');
+  if (attrs['android:backupAgent'])
+    errors.push(
+      'Custom backup agents require separate privacy review; XML exclusions are insufficient.',
+    );
   if (
     attrs['android:fullBackupContent'] !== '@xml/aptly_backup_rules' ||
     attrs['android:dataExtractionRules'] !== '@xml/aptly_data_extraction_rules'

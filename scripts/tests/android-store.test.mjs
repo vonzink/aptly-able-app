@@ -78,6 +78,7 @@ test('manifest release gate rejects permission creep and stale/insecure profiles
     ['android:debuggable', 'true'],
     ['android:usesCleartextTraffic', 'true'],
     ['android:allowBackup', 'true'],
+    ['android:backupAgent', '.CustomBackupAgent'],
   ]) {
     const m = fixture();
     m.manifest.application[0].$[key] = value;
