@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card } from '../../../ui/components';
 import { fontFamily, useTheme } from '../../../ui/theme';
 import { pickTranscript } from '../../../services/recording-picker';
+import { pickerFailureMessage } from '../../../services/recording-picker-errors';
 import type { LocalRecording } from '../recording-model';
 import { useRecordingsController } from '../RecordingsProvider';
 import { durationLabel } from '../presentation';
@@ -30,10 +31,16 @@ export function TranscriptPanel({
     setError(null);
     try {
       const file = await pickTranscript();
-      if (file) await controller.attachTranscript(recording.id, file.name, file.text);
-    } catch {
+      if (file) {
+        await controller.attachTranscript(recording.id, file.name, file.text);
+        if (file.cleanupWarning) setError(file.cleanupWarning);
+      }
+    } catch (error) {
       setError(
-        'The transcript could not be opened. Choose a TXT, SRT or VTT file smaller than 2 MB.',
+        pickerFailureMessage(
+          error,
+          'The transcript could not be opened. Choose a TXT, SRT or VTT file smaller than 2 MB.',
+        ),
       );
     } finally {
       locked.current = false;

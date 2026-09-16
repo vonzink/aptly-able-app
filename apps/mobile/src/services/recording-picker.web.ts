@@ -1,3 +1,4 @@
+import type { TranscriptImport } from './recording-picker-types';
 import type { AudioImport } from '../features/recordings/recording-model';
 
 function pickFile(accept: string): Promise<File | null> {
@@ -35,7 +36,7 @@ export async function pickAudio(): Promise<AudioImport | null> {
 export function releasePickedAudio(uri: string) {
   URL.revokeObjectURL(uri);
 }
-export async function pickTranscript() {
+export async function pickTranscript(): Promise<TranscriptImport | null> {
   const file = await pickFile('.txt,.srt,.vtt,text/plain,text/vtt,application/x-subrip');
   if (!file) return null;
   if (file.size > 2 * 1024 * 1024) throw new Error('Choose a transcript smaller than 2 MB.');

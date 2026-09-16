@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { pickAudio, releasePickedAudio } from '../../services/recording-picker';
+import { pickerFailureMessage, pickerCleanupWarning } from '../../services/recording-picker-errors';
 import { useRecordingsController } from './RecordingsProvider';
 
 export function useImportRecording(onImported: (id: string) => void) {
@@ -14,21 +15,34 @@ export function useImportRecording(onImported: (id: string) => void) {
     setError(null);
     controller.clearError();
     let uri: string | null = null;
+    let importedId: string | null = null;
+    let cleanupFailed = false;
     try {
       const input = await pickAudio();
       if (!input) return;
       uri = input.uri;
-      const id = await controller.importAudio(input);
-      if (id) onImported(id);
-    } catch {
+      importedId = await controller.importAudio(input);
+    } catch (error) {
       setError(
-        'The file could not be imported. Choose an MP3, WAV or M4A recording and try again.',
+        pickerFailureMessage(
+          error,
+          'The file could not be imported. Choose an MP3, WAV or M4A recording and try again.',
+        ),
       );
     } finally {
-      if (uri) releasePickedAudio(uri);
+      if (uri) {
+        try {
+          await releasePickedAudio(uri);
+        } catch {
+          cleanupFailed = true;
+          setError(`Any saved recording is available in your library. ${pickerCleanupWarning}`);
+        }
+      }
       importing.current = false;
       setPicking(false);
     }
+    // Keep cleanup feedback visible in the library instead of navigating away.
+    if (importedId && !cleanupFailed) onImported(importedId);
   }
   return { picking, error, clearError: () => setError(null), importRecording };
 }
