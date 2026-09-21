@@ -2,7 +2,7 @@ import { access, readFile, stat } from 'node:fs/promises';
 import { fileURLToPath, URL } from 'node:url';
 import process from 'node:process';
 import { log, error } from 'node:console';
-import { createHash } from 'node:crypto';
+import { sdkHashMatches } from './sdk-artifact-checks.mjs';
 
 const root = new URL('../apps/mobile/modules/plaud-sdk/', import.meta.url);
 const platform = process.argv[2] ?? 'all';
@@ -11,6 +11,7 @@ if (!['ios', 'android', 'all'].includes(platform)) {
   process.exitCode = 1;
 } else {
   const failures = [];
+  const artifacts = JSON.parse(await readFile(new URL('sdk-artifacts.json', root), 'utf8'));
   const required = async (path, minimumBytes = 1) => {
     try {
       const file = new URL(path, root);
@@ -24,11 +25,15 @@ if (!['ios', 'android', 'all'].includes(platform)) {
   };
   await required('expo-module.config.json');
   if (platform === 'all' || platform === 'ios') {
-    for (const name of ['PlaudBleSDK', 'PlaudWiFiSDK', 'PlaudDeviceBasicSDK'])
-      await required(
-        `ios/Frameworks/${name}.xcframework/ios-arm64/${name}.framework/${name}`,
-        1024,
-      );
+    for (const name of ['PlaudBleSDK', 'PlaudWiFiSDK', 'PlaudDeviceBasicSDK']) {
+      const path = `ios/Frameworks/${name}.xcframework/ios-arm64/${name}.framework/${name}`;
+      await required(path, 1024);
+      if (!failures.includes(fileURLToPath(new URL(path, root)))) {
+        const pin = artifacts.ios?.binaries?.find((entry) => entry.path === path);
+        if (!sdkHashMatches(await readFile(new URL(path, root)), pin?.sha256))
+          failures.push(`iOS ${name} differs from sdk-artifacts.json or has no reviewed hash.`);
+      }
+    }
     await required(
       'ios/Frameworks/PlaudDeviceBasicSDK.xcframework/ios-arm64/PlaudDeviceBasicSDK.framework/PlaudDeviceBasicSDK.bundle/Info.plist',
     );
@@ -37,14 +42,13 @@ if (!['ios', 'android', 'all'].includes(platform)) {
     );
   }
   if (platform === 'all' || platform === 'android') {
-    const artifacts = JSON.parse(await readFile(new URL('sdk-artifacts.json', root), 'utf8'));
     const { path, sha256 } = artifacts.android;
     await required(path, 1024);
     if (!failures.includes(fileURLToPath(new URL(path, root)))) {
       const bytes = await readFile(new URL(path, root));
       if (bytes[0] !== 0x50 || bytes[1] !== 0x4b)
         failures.push('Android SDK is not an AAR/ZIP archive.');
-      if (createHash('sha256').update(bytes).digest('hex') !== sha256)
+      if (!sdkHashMatches(bytes, sha256))
         failures.push(
           'Android SDK differs from sdk-artifacts.json. Restore the pinned artifact or review the SDK upgrade and its dependencies.',
         );

@@ -25,6 +25,7 @@ export function buildCommands({ mode, archive, exportPath, exportOptions, unsign
       ],
     ];
   return [
+    ['node', ['scripts/check-plaud-sdk.mjs', 'ios']],
     ...['@aptly/contracts', '@aptly/api-client', '@aptly/product-content'].map((pkg) => [
       'pnpm',
       ['--filter', pkg, 'build'],

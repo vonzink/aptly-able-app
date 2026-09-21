@@ -17,4 +17,6 @@ Application behavior belongs in `apps/mobile/src/features/plaud-device` and its 
 
 The documented `android/libs/plaud-sdk.aar` is absent from this exact official upstream checkout, and its releases provide no binary. On 2026-09-14, a copy labeled SDK 1.0.13 was recovered from a public fork of the SDK repository and added at that path. Its pinned source, hash, compatibility checks, and provenance limits are recorded in [SDK_PROVENANCE.md](android/libs/SDK_PROVENANCE.md). This is a separately sourced binary, not a file from the official React Native checkout.
 
-The old `https://github.com/Plaud-AI/plaud-sdk-public` repository returns HTTP 404 from GitHub's unauthenticated repository API at this check. That alone does not establish whether it was renamed, removed or made private.
+The old `https://github.com/Plaud-AI/plaud-sdk-public` repository returned HTTP 404 at the original check. On September 18 it became accessible to this review; the official release labeled 1.0.57 was inspected separately and not installed. See [current intake](../../../../docs/verification/2026-09-18-submission-gates.md) for codec and compatibility blockers.
+
+On September 18 the three local iOS framework executables were hashed and compared with fresh downloads from the pinned official commit above. All matched. `sdk-artifacts.json` now pins those executable hashes; native setup and iOS store archive checks reject unnoticed changes. This check does not establish vendor distribution rights, signatures, privacy behavior or the integrity of every framework resource.

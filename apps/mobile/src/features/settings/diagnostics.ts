@@ -4,6 +4,7 @@ import type {
   PlaudDeviceSnapshot,
 } from '../plaud-device/plaud-device-controller';
 import type { PlaudSyncSnapshot } from '../plaud-device/plaud-sync-model';
+import { safeConnectionDetail, safeConnectionStage } from '../plaud-device/connection-diagnostics';
 
 export const permissionLabels = {
   granted: 'Allowed',
@@ -101,7 +102,7 @@ export function createDiagnosticsReport({
   permission: RecorderPermission;
 }): string {
   return [
-    'Aptly Able diagnostics · format 1',
+    'Aptly Able diagnostics · format 2',
     `Platform: ${label({ ios: 'iOS', android: 'Android', web: 'Web', unknown: 'Unknown' }, build.platform)}`,
     `Version: ${version(build.version)}`,
     `Build: ${build.platform === 'web' ? 'Not applicable (web)' : version(build.buildNumber)}`,
@@ -109,6 +110,11 @@ export function createDiagnosticsReport({
     `Mode: ${label({ pilot: 'Pilot', development: 'Development', simulation: 'Simulation' }, build.mode)}`,
     `Account: ${enrollment.phase === 'signing-in' ? 'Signing in' : enrollment.actorId ? 'Signed in' : 'Signed out'}`,
     `Recorder: ${recorderConnectionLabel(device)}`,
+    `Setup stage: ${safeConnectionStage(device.connection?.stage) ?? 'Not reported'}`,
+    `Setup result: ${safeConnectionDetail(device.connection?.detail) ?? 'Not reported'}`,
+    `Bluetooth confirmed: ${device.connection?.bluetooth === true ? 'Yes' : 'No'}`,
+    `Pairing confirmed: ${device.connection?.binding === true ? 'Yes' : 'No'}`,
+    `Recorder ready confirmed: ${device.connection?.deviceReady === true ? 'Yes' : 'No'}`,
     `Model: ${device.assignment ? label({ notepins: 'Plaud NotePin S', notepro: 'Plaud Note Pro' }, device.assignment.model) : 'Not loaded'}`,
     `Permissions: ${label(permissionLabels, permission)}`,
     `Transfer: ${label(transferLabels, sync.phase)}`,

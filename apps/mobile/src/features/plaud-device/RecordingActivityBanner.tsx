@@ -16,7 +16,7 @@ import {
   type RecordingActivityMemory,
 } from './recording-activity-model';
 
-export function RecordingActivityBanner() {
+export function RecordingActivityBanner({ topInset = true }: { topInset?: boolean }) {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -49,7 +49,7 @@ export function RecordingActivityBanner() {
         {
           backgroundColor: active ? colors.orangeBg : colors.surfaceAlt,
           borderColor: active ? colors.orangeInk : colors.line,
-          paddingTop: 12 + insets.top,
+          paddingTop: 12 + (topInset ? insets.top : 0),
         },
       ]}
     >

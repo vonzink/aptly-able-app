@@ -23,6 +23,8 @@ const fixture = () => ({
       'INTERNET',
       'FOREGROUND_SERVICE',
       'FOREGROUND_SERVICE_LOCATION',
+      'FOREGROUND_SERVICE_MICROPHONE',
+      'RECORD_AUDIO',
       'POST_NOTIFICATIONS',
       'BLUETOOTH_SCAN',
       'BLUETOOTH_CONNECT',
@@ -56,6 +58,13 @@ const fixture = () => ({
         service: [
           {
             $: {
+              'android:name': 'expo.modules.audio.service.AudioRecordingService',
+              'android:exported': 'false',
+              'android:foregroundServiceType': 'microphone',
+            },
+          },
+          {
+            $: {
               'android:name': 'expo.modules.plaudsdk.PlaudRecordingLocationService',
               'android:exported': 'false',
               'android:foregroundServiceType': 'location',
@@ -76,7 +85,7 @@ test('manifest release gate rejects permission creep and stale/insecure profiles
   assert.deepEqual(check(fixture()), []);
   for (const permission of [
     'SYSTEM_ALERT_WINDOW',
-    'RECORD_AUDIO',
+    'CAMERA',
     'ACCESS_BACKGROUND_LOCATION',
     'READ_EXTERNAL_STORAGE',
   ]) {
@@ -205,6 +214,7 @@ test('recording location service permits only the reviewed foreground permission
     m.manifest['uses-permission'].push({ $: { 'android:name': `android.permission.${name}` } });
   }
   m.manifest.application[0].service = [
+    m.manifest.application[0].service[0],
     {
       $: {
         'android:name': 'expo.modules.plaudsdk.PlaudRecordingLocationService',
@@ -214,6 +224,19 @@ test('recording location service permits only the reviewed foreground permission
     },
   ];
   assert.deepEqual(check(m), []);
-  m.manifest.application[0].service[0].$['android:exported'] = 'true';
+  m.manifest.application[0].service[1].$['android:exported'] = 'true';
   assert.ok(check(m).some((error) => error.includes('location service')));
+});
+
+test('phone recording requires microphone permission and a private foreground service', () => {
+  for (const name of ['RECORD_AUDIO', 'FOREGROUND_SERVICE_MICROPHONE']) {
+    const m = fixture();
+    m.manifest['uses-permission'] = m.manifest['uses-permission'].filter(
+      (row) => row.$['android:name'] !== `android.permission.${name}`,
+    );
+    assert.ok(check(m).some((e) => e.includes(name)));
+  }
+  const m = fixture();
+  m.manifest.application[0].service[0].$['android:exported'] = 'true';
+  assert.ok(check(m).some((e) => e.includes('Phone recording service')));
 });

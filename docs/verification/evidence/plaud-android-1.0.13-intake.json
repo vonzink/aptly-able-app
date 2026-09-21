@@ -1,0 +1,224 @@
+{
+  "sha256": "d342c8ca58a7326fb4f11e73ce23e00ae21a83c4bc399d869835e14013c6ab02",
+  "bytes": 2836768,
+  "checksumMatches": true,
+  "libraries": [
+    {
+      "name": "jni/arm64-v8a/libjni_ogg.so",
+      "abi": "arm64-v8a",
+      "sha256": "832da27a5c57422d203bc531b38cd0e0dbb14092051f6b59a6fa9726e3a5e6e1",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/arm64-v8a/liblame.so",
+      "abi": "arm64-v8a",
+      "sha256": "f5747fc4b484fd676edc1500b2b52a85b96abeac95daeb0325dc8398a8a9efee",
+      "elf64Checked": true,
+      "errors": [
+        "jni/arm64-v8a/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/arm64-v8a/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/arm64-v8a/liblame.so: LOAD file/virtual offsets are not 16 KB congruent.",
+        "jni/arm64-v8a/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/arm64-v8a/liblame.so: LOAD file/virtual offsets are not 16 KB congruent."
+      ],
+      "warnings": [
+        "jni/arm64-v8a/liblame.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    },
+    {
+      "name": "jni/arm64-v8a/libopus.so",
+      "abi": "arm64-v8a",
+      "sha256": "862a9ee5db50b605c6555bd9314525e60cd2cad9879b3d1949916221946e7a79",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": [
+        "jni/arm64-v8a/libopus.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    },
+    {
+      "name": "jni/arm64-v8a/libopusJni.so",
+      "abi": "arm64-v8a",
+      "sha256": "e5c25dc434d626b61611ad7558ee967e6b25923b767fa3a3361f34a68c842d78",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/arm64-v8a/libtnt_ble_utils.so",
+      "abi": "arm64-v8a",
+      "sha256": "29803f234cbd49c9e251fa842d2f12403884475ad9c35884753281a325157927",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/armeabi-v7a/libjni_ogg.so",
+      "abi": "armeabi-v7a",
+      "sha256": "f3cb645c29c8080eb746dc53f6fb5734fb1c8a8f48bf5cdba6b28d567dad04d1",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/armeabi-v7a/liblame.so",
+      "abi": "armeabi-v7a",
+      "sha256": "f071114e6c6b4dafa115ad79f13fe0b187a1d25ba3ab073402c3e8f1c8226dcb",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/armeabi-v7a/libopus.so",
+      "abi": "armeabi-v7a",
+      "sha256": "55e40812dddd65460d84f8e26018033a45148063a37719abe7e5b3a475b9cd73",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/armeabi-v7a/libopusJni.so",
+      "abi": "armeabi-v7a",
+      "sha256": "bb320d6e5b872aefa0375aa3c8bc68851209a8101c53ed29d08148544f3b7bda",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/armeabi-v7a/libtnt_ble_utils.so",
+      "abi": "armeabi-v7a",
+      "sha256": "ff2602688e30d4c0950b16c6b3011e5af727296a9fd42fd51e1003b8e5201c27",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/x86/libjni_ogg.so",
+      "abi": "x86",
+      "sha256": "5546e6bee9ac5438b6d93cee20db17eba7e571394e8f92876ec17e7ba3002044",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/x86/liblame.so",
+      "abi": "x86",
+      "sha256": "6f0778d90f89aca11e3b67c7ba1fab3d17872311fea62b777262753d95633818",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/x86/libopus.so",
+      "abi": "x86",
+      "sha256": "c123869c14e9a149106d49ede946344ee07677cd5fc1cfbb2d346218c77c7fbe",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/x86/libopusJni.so",
+      "abi": "x86",
+      "sha256": "03ab8d3a3a18e0c8272e91b4e0b503bbb7d2c162076850766bfa02c97ebe8b6f",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/x86/libtnt_ble_utils.so",
+      "abi": "x86",
+      "sha256": "3242e9de9e47b0a0bc9edd7e45f87a9dfb36848362f55071a338cc73fcdc0de1",
+      "elf64Checked": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "jni/x86_64/libjni_ogg.so",
+      "abi": "x86_64",
+      "sha256": "f08c596de516bb2c55a2a257f0cee35307f51d181d3366f56ba7dcef4587fa4e",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": [
+        "jni/x86_64/libjni_ogg.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    },
+    {
+      "name": "jni/x86_64/liblame.so",
+      "abi": "x86_64",
+      "sha256": "cc990858b00d3371470b770589d725e33d4a30256dc758d5baa43a6248118d39",
+      "elf64Checked": true,
+      "errors": [
+        "jni/x86_64/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/x86_64/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/x86_64/liblame.so: LOAD file/virtual offsets are not 16 KB congruent.",
+        "jni/x86_64/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/x86_64/liblame.so: LOAD file/virtual offsets are not 16 KB congruent."
+      ],
+      "warnings": [
+        "jni/x86_64/liblame.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    },
+    {
+      "name": "jni/x86_64/libopus.so",
+      "abi": "x86_64",
+      "sha256": "1788290a0c76c70b9b76140cea2b0aeb0abcc0c0bf49ade94213d4da2a5a5ccb",
+      "elf64Checked": true,
+      "errors": [
+        "jni/x86_64/libopus.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/x86_64/libopus.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+        "jni/x86_64/libopus.so: LOAD file/virtual offsets are not 16 KB congruent."
+      ],
+      "warnings": [
+        "jni/x86_64/libopus.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    },
+    {
+      "name": "jni/x86_64/libopusJni.so",
+      "abi": "x86_64",
+      "sha256": "18ca37fb909a9bb6f6473f12391a1bd97054389fb1e2e539464d6d2c54d4459e",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": [
+        "jni/x86_64/libopusJni.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    },
+    {
+      "name": "jni/x86_64/libtnt_ble_utils.so",
+      "abi": "x86_64",
+      "sha256": "edb96354f5dcb3a2078f9a344a609aaba98f95cd89ea48a0362395d2164d9a3e",
+      "elf64Checked": true,
+      "errors": [],
+      "warnings": [
+        "jni/x86_64/libtnt_ble_utils.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+      ]
+    }
+  ],
+  "missingBridgeTypes": [],
+  "reviewResources": ["res/raw/logback.xml"],
+  "errors": [
+    "jni/arm64-v8a/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/arm64-v8a/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/arm64-v8a/liblame.so: LOAD file/virtual offsets are not 16 KB congruent.",
+    "jni/arm64-v8a/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/arm64-v8a/liblame.so: LOAD file/virtual offsets are not 16 KB congruent.",
+    "jni/x86_64/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/x86_64/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/x86_64/liblame.so: LOAD file/virtual offsets are not 16 KB congruent.",
+    "jni/x86_64/liblame.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/x86_64/liblame.so: LOAD file/virtual offsets are not 16 KB congruent.",
+    "jni/x86_64/libopus.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/x86_64/libopus.so: ELF LOAD alignment 4096 is not 16 KB compatible.",
+    "jni/x86_64/libopus.so: LOAD file/virtual offsets are not 16 KB congruent."
+  ],
+  "warnings": [
+    "jni/arm64-v8a/liblame.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence.",
+    "jni/arm64-v8a/libopus.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence.",
+    "jni/x86_64/libjni_ogg.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence.",
+    "jni/x86_64/liblame.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence.",
+    "jni/x86_64/libopus.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence.",
+    "jni/x86_64/libopusJni.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence.",
+    "jni/x86_64/libtnt_ble_utils.so: RELRO end is not 16 KB aligned; require toolchain review and device evidence."
+  ],
+  "note": "Static intake only; all included ARM64/x86_64 libraries are checked. The current store build ships ARM64 only. No SDK was executed or installed. Compile/API review, license/support, release logging, cancellation, privacy, final APK/AAB packaging and device tests remain separate requirements."
+}

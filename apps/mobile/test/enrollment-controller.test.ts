@@ -13,6 +13,7 @@ import {
   type EnrollmentJournal,
   type EnrollmentJournalStore,
 } from '../src/features/enrollment/enrollment-controller';
+import { attachEnrollmentLinks } from '../src/features/enrollment/enrollment-link-intake';
 
 const token = 'Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE';
 const actorA = '11111111-1111-4111-8111-111111111111';
@@ -103,6 +104,102 @@ function setup(client = fakeClient(), store = journal(), sessions?: SessionStore
 }
 
 describe('enrollment controller', () => {
+  it('accepts a setup link before the enrollment screen opens and retains it through sign-in', async () => {
+    const resolved: string[] = [];
+    const { controller } = setup(
+      fakeClient({
+        resolveEnrollment: async (value) => {
+          resolved.push(value);
+          return preview;
+        },
+      }),
+    );
+    let deliver!: (url: string) => void;
+    const detach = attachEnrollmentLinks(controller, {
+      initial: async () => null,
+      subscribe: (listener) => {
+        deliver = listener;
+        return () => {};
+      },
+    });
+    expect(deliver).toBeTypeOf('function');
+    deliver(`aptlyable://enroll#token=${'A'.repeat(43)}`);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'signed-out', hasInvitation: true });
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot().phase).toBe('ready');
+    expect(resolved).toEqual(['A'.repeat(43)]);
+    detach();
+  });
+
+  it('prefers a new setup link over a delayed launch link and ignores unrelated URLs', async () => {
+    const resolved: string[] = [];
+    const { controller } = setup(
+      fakeClient({
+        resolveEnrollment: async (value) => {
+          resolved.push(value);
+          return preview;
+        },
+      }),
+    );
+    const launch = deferred<string | null>();
+    let deliver!: (url: string) => void;
+    let removed = false;
+    const detach = attachEnrollmentLinks(controller, {
+      initial: () => launch.promise,
+      subscribe: (listener) => {
+        deliver = listener;
+        return () => {
+          removed = true;
+        };
+      },
+    });
+    expect(deliver).toBeTypeOf('function');
+    deliver(`aptlyable://enroll#token=${'B'.repeat(43)}`);
+    deliver('aptlyable://settings');
+    launch.resolve(`aptlyable://enroll#token=${'A'.repeat(43)}`);
+    await launch.promise;
+    await controller.signIn('local-access');
+    expect(resolved).toEqual(['B'.repeat(43)]);
+    detach();
+    expect(removed).toBe(true);
+    deliver(`aptlyable://enroll#token=${'C'.repeat(43)}`);
+    expect(resolved).toEqual(['B'.repeat(43)]);
+  });
+
+  it('does not restore a setup link after its app subscription has been removed', async () => {
+    const { controller } = setup();
+    const launch = deferred<string | null>();
+    const detach = attachEnrollmentLinks(controller, {
+      initial: () => launch.promise,
+      subscribe: () => () => {},
+    });
+    detach();
+    launch.resolve(`aptlyable://enroll#token=${'A'.repeat(43)}`);
+    await launch.promise;
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot().phase).toBe('needs-invitation');
+  });
+
+  it('can reopen the same unused invitation after signing out', async () => {
+    const { controller } = setup();
+    let deliver!: (url: string) => void;
+    const detach = attachEnrollmentLinks(controller, {
+      initial: async () => null,
+      subscribe: (listener) => {
+        deliver = listener;
+        return () => {};
+      },
+    });
+    const link = `aptlyable://enroll#token=${'A'.repeat(43)}`;
+    deliver(link);
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot().phase).toBe('ready');
+    await controller.signOut();
+    deliver(link);
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot().phase).toBe('ready');
+    detach();
+  });
   it('restores the verified account and its saved recorder after restarting without a new QR', async () => {
     let raw: string | null = null;
     const sessions = createSessionStore(

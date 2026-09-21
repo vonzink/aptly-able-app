@@ -116,7 +116,7 @@ export function SettingsDiagnostics() {
         </Text>
         <Button
           variant="secondary"
-          label="Copy diagnostics"
+          label="Copy setup details"
           loading={copying}
           disabled={!build}
           onPress={() => void copy()}
@@ -132,7 +132,7 @@ export function SettingsDiagnostics() {
             ]}
           >
             {feedback === 'copied'
-              ? 'Diagnostics copied.'
+              ? 'Setup details copied. Share them with support.'
               : 'Could not copy automatically. Select and copy the report below.'}
           </Text>
         )}

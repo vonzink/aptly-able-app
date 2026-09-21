@@ -1,5 +1,7 @@
 # Aptly Able mobile
 
+**Future device support:** [Recorder-provider design](docs/RECORDER_PROVIDER_DESIGN.md) records the September 18 direction for adding other manufacturers behind separate SDK adapters while retaining one shared app/library. Plaud is the only external recorder provider currently implemented.
+
 The iOS/Android foundation for the Aptly Able recorder-to-transcript app. This workspace is self-contained under `aptly-able-app` inside the existing AptlyAble Git repository.
 
 **Current source status — September 14, 2026:** the latest cleanup is local and has not been tested or built, at the user's request. Earlier verification below describes prior builds. See the [cleanup record](docs/audits/2026-09-14-cleanup-without-testing.md) and [SDK capability review](docs/PLAUD_CAPABILITIES.md) for current changes, proposed features, and remaining work.

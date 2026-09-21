@@ -22,4 +22,12 @@ Before marking `privacyPolicyReviewed` true in `apps/mobile/store-readiness.json
 
 App Store privacy label answers still require an owner-reviewed data inventory and exact vendor behavior. Do not choose “Data Not Collected” based on an empty app manifest. No privacy label, encryption questionnaire, legal acceptance or corporate policy change was submitted by this task.
 
+The [September 18 SDK intake and privacy evidence](verification/2026-09-18-submission-gates.md) records exact installed iOS hashes and the installed/candidate Android hashes, static storage/logging findings and the remaining runtime capture requirements. The official Android candidate was not installed. SDK binary distribution rights are a separate gate (`providerDistributionReviewed`); an Apache license for sample code does not establish rights to distribute the proprietary binaries. Keep both vendor gates false until their evidence is recorded.
+
 The site accessibility statement describes the website's goals; it is not evidence that this mobile release passed VoiceOver, Dynamic Type, contrast or native permission-flow testing.
+
+## September 18 phone recording addition
+
+The app now requests microphone access for explicit phone recording, including background audio while locked. Android uses a private microphone foreground service and notification controls; iOS has a Live Activity extension. Its shared app-group content contains only timing/status and widget layout, never audio, recording titles, notes, account IDs or transcripts. Live Activity payload storage may remain in the local app group after an activity ends; it must not be used for sensitive recording metadata.
+
+Review the new disclosure and data inventory before submission: unfinished audio is temporary cache data; saved phone audio remains in the account-scoped local library until removed. Optional pilot transcription uses the same consented upload flow as imported audio. Account cleanup includes unfinished and saved phone recordings. The Plaud-only location option does not capture location for phone microphone recordings. No owner/vendor review flag is marked complete by this implementation.

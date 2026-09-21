@@ -204,3 +204,26 @@ describe('local recordings controller', () => {
     expect(reopened.getSnapshot()).toBe(reopened.getSnapshot());
   });
 });
+
+describe('phone recording library commits', () => {
+  const actorId = '11111111-1111-4111-8111-111111111111';
+  const audio = { id, actorId, createdAt: importedAt, uri: input.uri, input, durationSeconds: 20 };
+  it('saves ownership and keeps the same identity on retry', async () => {
+    const { controller, records } = fixture();
+    expect(await controller.savePhoneRecording(audio, () => true)).toBe(id);
+    expect(await controller.savePhoneRecording(audio, () => true)).toBe(id);
+    expect(records.size).toBe(1);
+    expect(records.get(id)?.phoneCapture).toEqual({ actorId, createdAt: importedAt });
+    expect(records.get(id)?.source).toBeUndefined();
+  });
+  it('does not save after the signed-in owner has changed', async () => {
+    const { controller, records } = fixture();
+    expect(await controller.savePhoneRecording(audio, () => false)).toBeNull();
+    expect(records.size).toBe(0);
+  });
+  it('rejects a duplicate identity belonging to a different recording', async () => {
+    const { controller, records } = fixture([record]);
+    expect(await controller.savePhoneRecording(audio, () => true)).toBeNull();
+    expect(records.get(id)).toEqual(record);
+  });
+});

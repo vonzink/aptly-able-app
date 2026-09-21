@@ -1,3 +1,5 @@
+import { phoneRecorder } from '../../services/phone-recorder';
+import { visibleToActor } from './recording-model';
 import { recordingLocation } from '../../services/recording-location';
 import * as Crypto from 'expo-crypto';
 import {
@@ -31,6 +33,7 @@ export function RecordingsProvider({
       createRecordingsController({
         store: recordingStore,
         locations: recordingLocation,
+        phoneDrafts: phoneRecorder,
         createId: Crypto.randomUUID,
         now: () => new Date().toISOString(),
       }),
@@ -58,8 +61,7 @@ export function useRecordings() {
   const snapshot = useLibrarySnapshot();
   const actorId = useContext(OwnerContext);
   const recordings = useMemo(
-    () =>
-      snapshot.recordings.filter((record) => !record.source || record.source.actorId === actorId),
+    () => snapshot.recordings.filter((record) => visibleToActor(record, actorId)),
     [snapshot.recordings, actorId],
   );
   return useMemo(() => ({ ...snapshot, recordings }), [snapshot, recordings]);

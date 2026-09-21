@@ -4,6 +4,13 @@ import { recorderIdentitySchema, type PlaudDeviceSession } from '@aptly/contract
 
 import type { PlaudNativePort, PlaudNearbyDevice } from './plaud-native-port';
 import { disconnectPlaudTransport } from './disconnect-plaud-transport';
+import {
+  connectionPreparationError,
+  handshakeFailureMessage,
+  safeConnectionDetail,
+  safeConnectionStage,
+  type ConnectionDiagnostics,
+} from './connection-diagnostics';
 
 export type PlaudDevicePhase =
   | 'unavailable'
@@ -37,6 +44,7 @@ export interface PlaudDeviceSnapshot {
   permissionDenied: boolean;
   cloudBound: boolean;
   pairingAttempted: boolean;
+  connection: ConnectionDiagnostics | null;
   /** Keep each confirmed release separately so a partial unpair can be retried safely. */
   release: { cloud: boolean; device: boolean; assignment: boolean } | null;
 }
@@ -86,6 +94,7 @@ const initial: PlaudDeviceSnapshot = {
   permissionDenied: false,
   cloudBound: false,
   pairingAttempted: false,
+  connection: null,
   release: null,
 };
 
@@ -138,14 +147,25 @@ export function createPlaudDeviceController({
   const current = (own: Job) =>
     !disposed && generation === own.generation && !own.abort.signal.aborted;
 
-  function wait<T>(promise: Promise<T>, own: Job, ms: number, message: string): Promise<T> {
+  function wait<T>(
+    promise: Promise<T>,
+    own: Job,
+    ms: number,
+    message: string | (() => string),
+  ): Promise<T> {
     if (!current(own)) {
       void promise.catch(() => undefined);
       return Promise.reject(new Cancelled());
     }
     return new Promise<T>((resolve, reject) => {
       const onAbort = () => finish(() => reject(new Cancelled()));
-      const timer = setTimeout(() => finish(() => reject(new DeviceFailure(message))), ms);
+      const timer = setTimeout(
+        () =>
+          finish(() =>
+            reject(new DeviceFailure(typeof message === 'function' ? message() : message)),
+          ),
+        ms,
+      );
       const finish = (settle: () => void) => {
         clearTimeout(timer);
         own.abort.signal.removeEventListener('abort', onAbort);
@@ -225,7 +245,8 @@ export function createPlaudDeviceController({
                 ? requireScanDisclosure
                   ? 'Allow Nearby devices / Bluetooth and Location with Precise location in phone settings, then search again. Approximate-only location cannot complete Plaud setup. You can keep using your local recordings without these permissions.'
                   : 'Allow Bluetooth and Nearby devices access in phone settings, then try again.'
-                : 'Recorder setup could not finish. Check your connection and try again.',
+                : (connectionPreparationError(error) ??
+                  'Recorder setup could not finish. Check your connection and try again.'),
         });
         invalidate();
       })
@@ -263,6 +284,8 @@ export function createPlaudDeviceController({
       native.addListener('connectState', ({ connected, failed }) => {
         if (!isCurrent() || !connectionAttempt) return;
         bleConnected = connected;
+        if (snapshot.phase === 'connecting' && snapshot.connection && connected)
+          publish({ connection: { ...snapshot.connection, bluetooth: true } });
         if (snapshot.phase === 'unpairing') return; // Depair confirmation may follow disconnect.
         if (snapshot.phase === 'disconnecting') {
           if (!connected && !failed) disconnected?.resolve();
@@ -274,7 +297,8 @@ export function createPlaudDeviceController({
         }
         if (failed || !connected) {
           const message = failed
-            ? 'The recorder handshake failed. Keep the recorder nearby and try again.'
+            ? (handshakeFailureMessage(snapshot.connection) ??
+              'The recorder handshake failed. Keep the recorder awake and nearby, check internet access, then search again. If it repeats, share setup details from Settings with support.')
             : 'Your recorder disconnected. Its pairing is saved; reconnect when ready.';
           if (snapshot.phase === 'connecting') {
             handshakeFailure = new DeviceFailure(message);
@@ -286,6 +310,24 @@ export function createPlaudDeviceController({
           return;
         }
         ready();
+      }),
+      native.addListener('connectStage', ({ stage, detail }) => {
+        if (
+          !isCurrent() ||
+          !connectionAttempt ||
+          snapshot.phase !== 'connecting' ||
+          !snapshot.connection
+        )
+          return;
+        const safeStage = safeConnectionStage(stage);
+        if (!safeStage) return;
+        publish({
+          connection: {
+            ...snapshot.connection,
+            stage: safeStage,
+            detail: safeConnectionDetail(detail),
+          },
+        });
       }),
       native.addListener('bind', ({ sn, status }) => {
         if (!isCurrent() || !connectionAttempt || snapshot.phase !== 'connecting') return;
@@ -300,11 +342,14 @@ export function createPlaudDeviceController({
           return;
         }
         boundSerial = true;
+        if (snapshot.connection) publish({ connection: { ...snapshot.connection, binding: true } });
         ready();
       }),
       native.addListener('penState', () => {
         if (!isCurrent() || !connectionAttempt || snapshot.phase !== 'connecting') return;
         penStateReceived = true;
+        if (snapshot.connection)
+          publish({ connection: { ...snapshot.connection, deviceReady: true } });
         ready();
       }),
       native.addListener('depair', ({ status }) => {
@@ -339,7 +384,13 @@ export function createPlaudDeviceController({
     if (!canScan()) return Promise.resolve();
     invalidate();
     return run(async (own) => {
-      publish({ phase: 'preparing', nearby: null, message: null, permissionDenied: false });
+      publish({
+        phase: 'preparing',
+        nearby: null,
+        message: null,
+        permissionDenied: false,
+        connection: null,
+      });
       await wait(
         cleanup,
         own,
@@ -430,7 +481,16 @@ export function createPlaudDeviceController({
       handshakeFailure = null;
       handshake = pending<void>();
       connectionAttempt = true;
-      publish({ phase: 'connecting' });
+      publish({
+        phase: 'connecting',
+        connection: {
+          stage: null,
+          detail: null,
+          bluetooth: false,
+          binding: false,
+          deviceReady: false,
+        },
+      });
       await wait(
         Promise.all([
           native.connectBleDevice({ uuid: device.uuid, deviceToken: actorId }),
@@ -438,7 +498,9 @@ export function createPlaudDeviceController({
         ]),
         own,
         handshakeMs,
-        'Secure setup was not confirmed. Keep the recorder nearby and try connecting again.',
+        () =>
+          handshakeFailureMessage(snapshot.connection) ??
+          'Secure setup was not confirmed within 30 seconds. Keep the recorder awake and nearby, check your internet connection, then search again. If it repeats, open Settings and copy setup details for support.',
       );
       if (handshakeFailure) throw handshakeFailure;
       if (!bleConnected || !boundSerial || !penStateReceived)

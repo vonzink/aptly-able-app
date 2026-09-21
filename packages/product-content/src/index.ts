@@ -31,7 +31,7 @@ export const androidRecorderDisclosure = {
 } as const;
 
 export const appDataNotice = {
-  updatedAt: 'September 16, 2026',
+  updatedAt: 'September 18, 2026',
   title: 'Privacy & your recordings',
   introduction: 'Understand where your recordings go and how to manage your information.',
   sections: [
@@ -45,16 +45,16 @@ export const appDataNotice = {
     {
       title: 'Audio, notes and transcripts on this phone',
       paragraphs: [
-        'Your Plaud recorder captures the audio. This app does not record with the phone’s microphone. You can use your phone keyboard’s dictation feature to write notes.',
-        'Received audio uses a temporary cache that can be cleared to save space. Choose Keep offline in app to retain a copy. Your recording titles, notes and imported transcripts are stored with the local library. Android app data is excluded from automatic cloud backup and device-to-device transfer. Export audio you want to keep elsewhere before removing the app or changing phones. On iPhone, older copies may exist in backups made before recording-location protection was added; those earlier backups are not modified by the app.',
-        'Files you import are available on this device even when you sign out. Recorder downloads are shown for the account that received them. Removing the app removes its local library, but does not delete originals on your recorder, files saved elsewhere, or server copies.',
+        'You can receive audio from your Plaud or choose Record audio to use the phone’s microphone. Microphone access is requested only when you start. Phone recording continues when you lock the screen or switch apps, until you stop or an interruption or the two-hour limit ends it. Android shows a recording notification with a Stop control; supported iPhones can show a Live Activity with status and a link to controls. Only recording status and timing appear there, not titles, notes or account details. You can use your phone keyboard’s dictation feature to write notes.',
+        'Phone recordings are saved on this phone until you delete them. Unfinished phone recordings use temporary, backup-excluded storage for recovery and may be lost if the app is force-closed or storage is cleared. Received Plaud audio uses a temporary cache that can be cleared to save space. Choose Keep offline in app to retain a copy. Your recording titles, notes and imported transcripts are stored with the local library. Android app data is excluded from automatic cloud backup and device-to-device transfer. Export audio you want to keep elsewhere before removing the app or changing phones. On iPhone, older copies may exist in backups made before recording-location protection was added; those earlier backups are not modified by the app.',
+        'Files you import are available on this device even when you sign out. Recorder downloads and phone recordings are shown for the account that created or received them. Account deletion removes that account’s phone recordings and unfinished phone audio during local cleanup. Removing the app removes its local library, but does not delete originals on your recorder, files saved elsewhere, or server copies.',
       ],
     },
     {
       title: 'Optional recording location',
       paragraphs: [
         'Save location during recordings is off by default and enabled separately for each account on this phone. If enabled, the phone saves timestamped coordinates and accuracy while a connected Plaud confirms recording. Capture stops when recording stops or pauses, Bluetooth disconnects, you sign out, or you disable the feature. Turning it off does not remove locations already saved.',
-        'With the required permissions and background support ready, capture can start from the Plaud record button while the phone is locked. iPhone needs Always location permission for background starts. Android displays an ongoing foreground-service notification while armed. Reopening and reconnecting may be required after the app closes; force-closing the app or losing the connection can leave location unavailable. Old recordings cannot be located from where they are later imported.',
+        'With the required permissions and background support ready, capture can start from the Plaud record button while the phone is locked. iPhone needs Always location permission for background starts. Android displays an ongoing foreground-service notification while armed. Reopening and reconnecting may be required after the app closes; force-closing the app or losing the connection can leave location unavailable. Old recordings cannot be located from where they are later imported. Phone microphone recordings do not use this Plaud recording-location feature.',
         'Location is stored on this phone and is not uploaded to Aptly Able or Plaud for this feature. Pending location samples are kept for up to 30 days or 100 sessions, then removed; locations attached to your library remain until you remove the location, delete the recording, or complete local account cleanup. Samples are limited to 600 per session. Pending location storage is excluded from device backup. On iPhone, the local recording-library folder is also excluded from backup once the location feature initializes, to protect coordinates saved with recordings.',
         'Open in Maps sends the selected coordinates to Apple Maps or Google Maps only when you choose that action. Audio and notes are not shared by that action. Location is not included in exported audio or transcription uploads. Remove location on a recording deletes its stored coordinates while keeping audio and notes.',
       ],

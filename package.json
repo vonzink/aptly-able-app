@@ -14,6 +14,7 @@
     "dev:phone-api": "node scripts/dev-phone-api.mjs",
     "native:check:ios": "node scripts/check-plaud-sdk.mjs ios",
     "native:check:android": "node scripts/check-plaud-sdk.mjs android",
+    "native:inspect:android": "node scripts/inspect-plaud-aar.mjs",
     "dev:api": "pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api dev",
     "dev:mobile": "pnpm --filter @aptly/product-content build && pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api-client build && pnpm --filter @aptly/mobile start",
     "dev:web": "pnpm --filter @aptly/product-content build && pnpm --filter @aptly/contracts build && pnpm --filter @aptly/api-client build && pnpm --filter @aptly/mobile web",

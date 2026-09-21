@@ -1,3 +1,4 @@
+import { usePhoneRecording } from '../../phone-recording/PhoneRecordingProvider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -24,6 +25,7 @@ export function RecordingPlayer({
 }) {
   const { colors } = useTheme();
   const controller = useRecordingsController();
+  const { microphoneInUse } = usePhoneRecording();
   const player = useAudioPlayer({ uri }, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
   const [error, setError] = useState<string | null>(null);
@@ -31,14 +33,15 @@ export function RecordingPlayer({
   const duration = Number.isFinite(status.duration) ? status.duration : 0;
   const position = Number.isFinite(status.currentTime) ? status.currentTime : 0;
   useEffect(() => {
-    if (!pausedForEditing) return;
+    if (!pausedForEditing && !microphoneInUse) return;
     try {
       player.pause();
     } catch {
       setError('Pause playback before dictating a note.');
     }
-  }, [pausedForEditing, player]);
+  }, [pausedForEditing, microphoneInUse, player]);
   useEffect(() => {
+    if (microphoneInUse) return;
     void setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: false,
@@ -46,13 +49,13 @@ export function RecordingPlayer({
     }).catch(() =>
       setError('Audio playback could not be prepared. Reopen this recording to try again.'),
     );
-  }, []);
+  }, [microphoneInUse]);
   useEffect(() => {
     if (status.isLoaded && duration > 0 && recording.durationSeconds !== duration)
       void controller.setDuration(recording.id, duration);
   }, [controller, recording.id, recording.durationSeconds, duration, status.isLoaded]);
   async function seek(seconds: number, play = false) {
-    if (!status.isLoaded) return;
+    if (!status.isLoaded || microphoneInUse) return;
     setError(null);
     try {
       await player.seekTo(Math.max(0, Math.min(duration, seconds)));
@@ -62,6 +65,7 @@ export function RecordingPlayer({
     }
   }
   async function toggle() {
+    if (microphoneInUse) return;
     setError(null);
     try {
       if (status.playing) player.pause();
@@ -85,14 +89,18 @@ export function RecordingPlayer({
           <View>
             <Text style={[styles.title, { color: colors.ink }]}>Listen back</Text>
             <Text style={[styles.caption, { color: colors.inkSecondary }]}>
-              {status.playing ? 'Playing your recording' : 'Ready when you are'}
+              {microphoneInUse
+                ? 'Finish phone recording before playback'
+                : status.playing
+                  ? 'Playing your recording'
+                  : 'Ready when you are'}
             </Text>
           </View>
         </View>
         <PlaybackSlider
           duration={duration}
           position={position}
-          enabled={status.isLoaded && !failed}
+          enabled={status.isLoaded && !failed && !microphoneInUse}
           onSeek={(seconds) => void seek(seconds)}
         />
         <View style={styles.times}>
@@ -107,21 +115,21 @@ export function RecordingPlayer({
           <MediaControl
             icon="play-back"
             label="Back 15 sec"
-            disabled={!status.isLoaded || failed}
+            disabled={!status.isLoaded || failed || microphoneInUse}
             onPress={() => void seek(position - 15)}
           />
           <MediaControl
             icon={status.playing ? 'pause' : 'play'}
             label={status.playing ? 'Pause' : 'Play'}
             prominent
-            disabled={!status.isLoaded || failed}
+            disabled={!status.isLoaded || failed || microphoneInUse}
             loading={!status.isLoaded && !failed}
             onPress={() => void toggle()}
           />
           <MediaControl
             icon="play-forward"
             label="Ahead 30 sec"
-            disabled={!status.isLoaded || failed}
+            disabled={!status.isLoaded || failed || microphoneInUse}
             onPress={() => void seek(position + 30)}
           />
         </View>
@@ -136,7 +144,7 @@ export function RecordingPlayer({
                 selected: rate === speed,
                 disabled: !status.isLoaded || failed,
               }}
-              disabled={!status.isLoaded || failed}
+              disabled={!status.isLoaded || failed || microphoneInUse}
               onPress={() => {
                 try {
                   player.setPlaybackRate(speed);

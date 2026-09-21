@@ -27,15 +27,15 @@ export function Dashboard({
         <div className="nav-section">
           <span>Workspace</span>
           <span className="nav-current" aria-current="page">
-            <span aria-hidden="true">▣</span> Recorder assignments
+            <span aria-hidden="true">▣</span> {pilot ? 'My recorders' : 'Recorder assignments'}
           </span>
         </div>
         <div className="sidebar-note">
           <strong>A simple start.</strong>
           <p>
-            Assign a recorder.
+            {pilot ? 'Add your recorder.' : 'Assign a recorder.'}
             <br />
-            Share an invitation.
+            {pilot ? 'Open your setup link.' : 'Share an invitation.'}
             <br />
             Follow setup.
           </p>
@@ -65,7 +65,7 @@ export function Dashboard({
               <h1>{pilot ? 'Your recorder' : 'Recorder assignments'}</h1>
               <p>
                 {pilot
-                  ? 'Add your recorder, then continue setup on your phone.'
+                  ? 'Add your recorder and open its setup link. You can do every step on this phone; a computer is optional.'
                   : 'Give each person a recorder and a clear way to get started.'}
               </p>
             </div>
@@ -86,7 +86,13 @@ export function Dashboard({
               {workspace.notice}
             </div>
           )}
-          {showForm && <AssignmentForm workspace={workspace} onClose={() => setShowForm(false)} />}
+          {showForm && (
+            <AssignmentForm
+              workspace={workspace}
+              pilot={pilot}
+              onClose={() => setShowForm(false)}
+            />
+          )}
           <div className="dashboard-grid">
             <section className="assignment-list panel" aria-label="Recorder assignments">
               <div className="list-header">
@@ -152,11 +158,14 @@ export function Dashboard({
                     {workspace.busy ? 'Loading your workspace…' : 'Your first recorder starts here'}
                   </h3>
                   <p>
-                    Assign a supported Plaud recorder to a person, then create their enrollment
-                    invitation.
+                    {pilot
+                      ? 'Add your NotePin S or Note Pro using its full serial number. Then create a setup link to install and connect the phone app.'
+                      : 'Assign a supported Plaud recorder to a person, then create their enrollment invitation.'}
                   </p>
                   {!workspace.busy && (
-                    <button onClick={() => setShowForm(true)}>Assign a recorder</button>
+                    <button onClick={() => setShowForm(true)}>
+                      {pilot ? 'Add your recorder' : 'Assign a recorder'}
+                    </button>
                   )}
                 </div>
               )}
@@ -185,8 +194,8 @@ export function Dashboard({
             />
           </div>
           <p className="workspace-footnote">
-            Choose your phone, scan the QR, and connect your assigned recorder in the Aptly Able
-            app.
+            On your phone, use “Continue on this phone.” On a computer, scan the QR with your phone
+            camera. Bluetooth pairing happens in the installed Aptly Able app.
           </p>
         </main>
       </div>

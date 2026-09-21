@@ -213,7 +213,7 @@ class PlaudSdkModule : Module() {
     }
 
     Events(
-      "scanResult", "scanTimeout", "connectState", "penState", "bind", "fileList",
+      "scanResult", "scanTimeout", "connectState", "connectStage", "penState", "bind", "fileList",
       "exportProgress", "recordStart", "recordStop", "recordPause", "recordResume", "depair",
       "batteryState", "storageState", "recordingLocationChanged"
     )
@@ -400,6 +400,8 @@ class PlaudSdkModule : Module() {
             call.resolve(null)
           } catch (_: CancellationException) {
             call.reject(PlaudSdkException("Connection cancelled", "ERR_PLAUD_CANCELLED"))
+          } catch (failure: PlaudSdkException) {
+            call.reject(failure)
           } catch (_: Exception) {
             call.reject(PlaudSdkException("Device handshake preparation failed", "ERR_PLAUD_CONNECT"))
           }
@@ -584,6 +586,10 @@ class PlaudSdkModule : Module() {
       )
     }
 
+    override fun bleConnectStage(sn: String?, stage: String, detail: String?) {
+      connectionProgress(sn, stage, detail)
+    }
+
     override fun bleBind(sn: String?, status: Int, protVersion: Int, timezone: Int) {
       emit("bind", bundleOf("sn" to sn, "status" to status, "protVersion" to protVersion))
     }
@@ -714,6 +720,12 @@ class PlaudSdkModule : Module() {
 
   // MARK: - Helpers
 
+  private fun connectionProgress(sn: String?, stage: String, detail: String?) {
+    if (destroyed) return
+    val safe = PlaudConnectionProgress.sanitize(connectedDevice?.serialNumber, sn, stage, detail) ?: return
+    emit("connectStage", bundleOf("stage" to safe["stage"], "detail" to safe["detail"]))
+  }
+
   private fun recordStopBundle(sessionId: Long, reason: Int, fileExist: Boolean, fileSize: Long) =
     bundleOf(
       "sessionId" to sessionId, "reason" to reason,
@@ -729,16 +741,32 @@ class PlaudSdkModule : Module() {
    * fails, and allow cancellation to propagate to the connection job.
    */
   private suspend fun prepareHandshake(device: BleDevice) = withContext(Dispatchers.IO) {
-    val deadline = System.currentTimeMillis() + 10_000L
-    while (!NiceBuildSdk.isPartnerDataReady() && System.currentTimeMillis() < deadline) {
+    connectionProgress(device.serialNumber, "partner_key", "pending")
+    val deadline = android.os.SystemClock.elapsedRealtime() + 10_000L
+    while (!NiceBuildSdk.isPartnerDataReady() && android.os.SystemClock.elapsedRealtime() < deadline) {
       delay(200)
     }
     coroutineContext.ensureActive()
-    check(NiceBuildSdk.isPartnerDataReady()) { "Partner key readiness timed out" }
+    if (!NiceBuildSdk.isPartnerDataReady()) {
+      connectionProgress(device.serialNumber, "partner_key", "user_rsa_public_key_empty")
+      throw PlaudSdkException("Partner key readiness timed out", "ERR_PLAUD_AUTH_KEY")
+    }
     val sn = device.serialNumber
     check(!sn.isNullOrEmpty()) { "Device serial is required" }
-    check(NiceBuildSdk.signAndStoreDeviceSn(deviceType(sn), sn)) { "Device signing failed" }
+    connectionProgress(sn, "device_signing", "pending")
+    val signed = try {
+      NiceBuildSdk.signAndStoreDeviceSn(deviceType(sn), sn)
+    } catch (failure: CancellationException) {
+      throw failure
+    } catch (_: Exception) {
+      false
+    }
     coroutineContext.ensureActive()
+    if (!signed) {
+      connectionProgress(sn, "device_signing", "failed")
+      throw PlaudSdkException("Device signing failed", "ERR_PLAUD_DEVICE_SIGNING")
+    }
+    connectionProgress(sn, "device_signing", "ok")
   }
 
   /** SN prefix → device type, as expected by `signAndStoreDeviceSn`. */

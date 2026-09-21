@@ -86,7 +86,7 @@ public class PlaudSdkModule: Module {
     }
 
     Events(
-      "scanResult", "scanTimeout", "connectState", "penState", "bind", "fileList",
+      "scanResult", "scanTimeout", "connectState", "connectStage", "penState", "bind", "fileList",
       "exportProgress", "recordStart", "recordStop", "recordPause", "recordResume", "depair",
       "batteryState", "storageState", "recordingLocationChanged"
     )

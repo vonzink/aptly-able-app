@@ -142,6 +142,98 @@ afterEach(async () => {
 });
 
 describe('native Plaud recorder controller', () => {
+  it('exits secure setup even when native connect never settles and ignores late success', async () => {
+    const dispatch = deferred<void>();
+    const test = harness({}, { connectBleDevice: () => dispatch.promise });
+    await found(test);
+    const connecting = test.controller.connect();
+    await flush();
+    await vi.advanceTimersByTimeAsync(1001);
+    await connecting;
+    expect(test.controller.getSnapshot().phase).toBe('error');
+    expect(test.native.disconnect).toHaveBeenCalled();
+    dispatch.resolve();
+    test.emit('connectState', connected);
+    test.emit('bind', bind);
+    test.emit('penState', penState);
+    await flush();
+    expect(test.controller.getSnapshot().phase).toBe('error');
+  });
+  it('retains safe handshake evidence after timeout without claiming the device is ready', async () => {
+    const test = harness();
+    await found(test);
+    const connecting = test.controller.connect();
+    await flush();
+    test.emit('connectState', connected);
+    test.emit('bind', bind);
+    await vi.advanceTimersByTimeAsync(1001);
+    await connecting;
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'error',
+      connection: { bluetooth: true, binding: true, deviceReady: false },
+    });
+    expect(test.native.disconnect).toHaveBeenCalled();
+    await found(test);
+    expect(test.controller.getSnapshot().connection).toBeNull();
+  });
+
+  it('explains a rejected ownership handshake and preserves only allowlisted SDK details', async () => {
+    const test = harness();
+    await found(test);
+    const connecting = test.controller.connect();
+    await flush();
+    test.emit('connectStage', { stage: 'first_handshake', detail: 'status_1' });
+    test.emit('connectState', { connected: false, failed: true, state: 2 });
+    await connecting;
+    expect(test.controller.getSnapshot().phase).toBe('error');
+    expect(test.controller.getSnapshot().message).toContain('previous app or account');
+    expect(test.controller.getSnapshot().connection).toMatchObject({
+      stage: 'first_handshake',
+      detail: 'status_1',
+    });
+    test.controller.setEnrollment(null);
+    expect(test.controller.getSnapshot().connection).toBeNull();
+  });
+
+  it('does not accept progress alone as success or retain arbitrary vendor text', async () => {
+    const test = harness();
+    await found(test);
+    const connecting = test.controller.connect();
+    await flush();
+    test.emit('connectStage', { stage: 'private serial', detail: 'secret URL or token' });
+    expect(test.controller.getSnapshot().phase).toBe('connecting');
+    expect(JSON.stringify(test.controller.getSnapshot())).not.toContain('private serial');
+    expect(JSON.stringify(test.controller.getSnapshot())).not.toContain('secret URL');
+    test.emit('connectStage', { stage: 'sync_time', detail: 'ok' });
+    expect(test.controller.getSnapshot()).toMatchObject({
+      phase: 'connecting',
+      connection: { stage: 'sync_time', detail: 'ok' },
+    });
+    test.controller.cancel();
+    await connecting;
+  });
+
+  it.each([
+    ['ERR_PLAUD_AUTH_KEY', 'Plaud authentication'],
+    ['ERR_PLAUD_DEVICE_SIGNING', 'authorize this recorder'],
+  ])(
+    'explains native preparation failure %s without displaying raw errors',
+    async (code, message) => {
+      const test = harness(
+        {},
+        {
+          connectBleDevice: async () => {
+            throw Object.assign(new Error('private vendor payload'), { code });
+          },
+        },
+      );
+      await found(test);
+      await test.controller.connect();
+      expect(test.controller.getSnapshot().phase).toBe('error');
+      expect(test.controller.getSnapshot().message).toContain(message);
+      expect(test.controller.getSnapshot().message).not.toContain('private vendor payload');
+    },
+  );
   it.each([
     { serial: '882B123456785641', model: 'notepro' as const },
     { serial: '8810004812', model: 'notepins' as const },

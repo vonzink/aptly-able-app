@@ -34,6 +34,9 @@ test(
     try {
       const app = join(dir, 'AptlyAble.app');
       mkdirSync(app);
+      const widget = join(app, 'PlugIns', 'ExpoWidgetsTarget.appex');
+      mkdirSync(widget, { recursive: true });
+      writeFileSync(join(widget, 'Info.plist'), '{}');
       writeFileSync(join(app, 'main.jsbundle'), env.EXPO_PUBLIC_API_URL);
       const info = {
         CFBundleIdentifier: 'com.aptlyable.mobile',
@@ -41,16 +44,24 @@ test(
         AptlyRecorderMode: 'native',
         AptlyAPIOrigin: env.EXPO_PUBLIC_API_URL,
         AptlyPlaudWifiTransferEnabled: false,
+        NSSupportsLiveActivities: true,
+        ExpoWidgetsAppGroupIdentifier: 'group.com.aptlyable.mobile',
         NSLocationWhenInUseUsageDescription: 'Save location during recordings you enable.',
         NSLocationAlwaysAndWhenInUseUsageDescription: 'Save recording location when locked.',
-        UIBackgroundModes: ['bluetooth-central', 'location'],
+        NSMicrophoneUsageDescription: 'Record audio when you choose to start.',
+        UIBackgroundModes: ['bluetooth-central', 'location', 'audio'],
       };
       const run = (extra = {}) =>
         inspectApp({
           app,
           origin: env.EXPO_PUBLIC_API_URL,
           wifi: false,
-          plist: (p) => (p.endsWith('Info.plist') ? info : { NSPrivacyAccessedAPITypes: [] }),
+          plist: (p) =>
+            p === join(widget, 'Info.plist')
+              ? { CFBundleIdentifier: 'com.aptlyable.mobile.RecordingActivity' }
+              : p.endsWith('Info.plist')
+                ? info
+                : { NSPrivacyAccessedAPITypes: [] },
           ...extra,
         });
       assert.ok(
@@ -76,7 +87,18 @@ test(
         );
       assert.ok(!run({ unsigned: true }).errors.some((e) => e.includes('Missing supplied')));
       assert.deepEqual(run({ unsigned: true }).errors, []);
+      info.NSSupportsLiveActivities = false;
+      assert.ok(
+        run({ unsigned: true }).errors.some((e) => e.includes('Live Activity configuration')),
+      );
+      info.NSSupportsLiveActivities = true;
+      assert.ok(
+        run({ signedEntitlements: { 'get-task-allow': false } }).errors.some((e) =>
+          e.includes('app group'),
+        ),
+      );
       for (const key of [
+        'NSMicrophoneUsageDescription',
         'NSLocationWhenInUseUsageDescription',
         'NSLocationAlwaysAndWhenInUseUsageDescription',
       ]) {

@@ -9,9 +9,11 @@ import { RecorderPhoto } from './RecorderPhoto';
 export function AssignmentForm({
   workspace,
   onClose,
+  pilot = false,
 }: {
   workspace: Workspace;
   onClose: () => void;
+  pilot?: boolean;
 }) {
   const [userId, setUserId] = useState(workspace.users.length === 1 ? workspace.users[0]!.id : '');
   const [serial, setSerial] = useState('');
@@ -48,8 +50,14 @@ export function AssignmentForm({
     <section className="assignment-form panel" aria-labelledby="assignment-title">
       <div className="section-heading">
         <div>
-          <h2 id="assignment-title">Assign a recorder</h2>
+          <h2 id="assignment-title">{pilot ? 'Add your recorder' : 'Assign a recorder'}</h2>
           <p>Choose the model and enter its full serial number (SN).</p>
+          {pilot && (
+            <p>
+              This adds the recorder to your account. Next, create a setup link to install the app
+              and connect over Bluetooth.
+            </p>
+          )}
         </div>
         <button className="text-button" onClick={onClose} disabled={workspace.busy}>
           Cancel
@@ -58,7 +66,7 @@ export function AssignmentForm({
       <form ref={formRef} onSubmit={submit} noValidate>
         <div className="form-grid">
           <div>
-            <label htmlFor="assignee">Person</label>
+            <label htmlFor="assignee">{pilot ? 'Your account' : 'Person'}</label>
             <select
               id="assignee"
               name="userId"
@@ -160,7 +168,7 @@ export function AssignmentForm({
         <div className="form-footer">
           <span>Plaud Note and the original NotePin are not supported.</span>
           <button className="primary" disabled={workspace.busy || !workspace.users.length}>
-            {workspace.busy ? 'Saving…' : 'Save assignment'}
+            {workspace.busy ? 'Saving…' : pilot ? 'Add recorder' : 'Save assignment'}
           </button>
         </div>
       </form>

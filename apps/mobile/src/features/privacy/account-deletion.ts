@@ -1,3 +1,4 @@
+import { recordingOwner } from '../recordings/recording-model';
 import type { DeletionStatusStore } from './deletion-status-store';
 import type { DeletionRecoveryStore } from './deletion-recovery-store';
 export type { DeletionRecoveryStore, DeletionRecoveryIntent } from './deletion-recovery-store';
@@ -62,6 +63,7 @@ export function createDeletionJournal(
  * unscoped manual imports are never selected for removal. An unreadable library is
  * explicitly incomplete, not successfully empty. */
 export async function removeAccountRecordings(library: RecordingsController, actorId: string) {
+  await library.clearAccountPhoneDrafts(actorId);
   await library.clearAccountLocations(actorId);
   await library.reload();
   const snapshot = library.getSnapshot();
@@ -69,11 +71,12 @@ export async function removeAccountRecordings(library: RecordingsController, act
     throw new Error('Local library could not be read. Retry local cleanup.');
   let failed = snapshot.unavailableCount > 0;
   for (const recording of snapshot.recordings) {
-    if (recording.source?.actorId === actorId && !(await library.remove(recording.id)))
+    if (recordingOwner(recording) === actorId && !(await library.remove(recording.id)))
       failed = true;
   }
   // Per-record removal/acknowledgement can create coordinate-free suppression
   // markers; account cleanup removes those and the consent preference as well.
+  await library.clearAccountPhoneDrafts(actorId);
   await library.clearAccountLocations(actorId);
   if (failed)
     throw new Error(

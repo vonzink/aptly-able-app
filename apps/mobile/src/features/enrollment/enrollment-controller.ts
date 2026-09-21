@@ -23,6 +23,8 @@ type Phase =
 
 export type EnrollmentSnapshot = {
   phase: Phase;
+  /** Presence only: invitation secrets never enter the render/diagnostic snapshot. */
+  hasInvitation: boolean;
   actorId: string | null;
   /** Display-only sign-in email; never persisted in the enrollment journal or diagnostics. */
   accountEmail: string | null;
@@ -57,6 +59,7 @@ export interface EnrollmentController {
 
 const initial: EnrollmentSnapshot = {
   phase: 'signed-out',
+  hasInvitation: false,
   actorId: null,
   accountEmail: null,
   preview: null,
@@ -78,7 +81,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
   const listeners = new Set<() => void>();
 
   const update = (next: Partial<EnrollmentSnapshot>) => {
-    snapshot = { ...snapshot, ...next };
+    snapshot = { ...snapshot, ...next, hasInvitation: Boolean(invitation) };
     listeners.forEach((listener) => listener());
   };
   const active = (requestGeneration: number) => requestGeneration === generation;
@@ -122,6 +125,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     // without cancelling authentication or exposing an unverified actor.
     if (authenticationGeneration === generation) {
       invitation = token || null;
+      update({});
       return;
     }
     const discardPendingClaim = snapshot.phase === 'claiming';
@@ -298,7 +302,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     generation += 1;
     cancelRequest();
     claimPromise = null;
-    snapshot = { ...initial, message };
+    snapshot = { ...initial, message, hasInvitation: Boolean(invitation) };
     listeners.forEach((listener) => listener());
   }
 

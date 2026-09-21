@@ -103,6 +103,7 @@ export type PlaudSdkEvents = {
   scanResult: (data: PlaudScanResult) => void;
   scanTimeout: (data: { reason?: string }) => void;
   connectState: (data: PlaudConnectState) => void;
+  connectStage: (data: { stage: string; detail: string | null }) => void;
   penState: (data: PlaudPenState) => void;
   bind: (data: { sn: string | null; status: number; protVersion: number }) => void;
   fileList: (data: PlaudFileList) => void;

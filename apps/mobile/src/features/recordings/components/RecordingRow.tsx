@@ -23,7 +23,9 @@ export const RecordingRow = memo(function RecordingRow({
         ? recording.retention === 'temporary'
           ? 'Temporary audio on this device'
           : 'Kept offline in app'
-        : 'Imported audio on this device';
+        : recording.phoneCapture
+          ? 'Recorded on this phone'
+          : 'Imported audio on this device';
   const transcriptStatus = recording.transcript ? 'Transcript attached' : 'No transcript attached';
   return (
     <Pressable

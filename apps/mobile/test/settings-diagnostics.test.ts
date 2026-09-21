@@ -10,6 +10,7 @@ import type { PlaudSyncSnapshot } from '../src/features/plaud-device/plaud-sync-
 const privateValue = 'PRIVATE-DO-NOT-COPY';
 const enrollment: EnrollmentSnapshot = {
   phase: 'saved',
+  hasInvitation: false,
   actorId: privateValue,
   accountEmail: `${privateValue}@example.com`,
   preview: null,
@@ -23,6 +24,7 @@ const device: PlaudDeviceSnapshot = {
   message: privateValue,
   cloudBound: true,
   pairingAttempted: true,
+  connection: null,
   scanDisclosure: null,
   permissionDenied: false,
   release: null,
@@ -59,6 +61,41 @@ const input = {
 };
 
 describe('support diagnostics', () => {
+  it('reports the last setup stage and missing confirmation after failure without exposing raw values', () => {
+    const report = createDiagnosticsReport({
+      ...input,
+      device: {
+        ...device,
+        phase: 'error',
+        connection: {
+          stage: 'first_handshake',
+          detail: 'status_1',
+          bluetooth: true,
+          binding: false,
+          deviceReady: false,
+        },
+      },
+    });
+    expect(report).toContain('Setup stage: first_handshake');
+    expect(report).toContain('Setup result: status_1');
+    expect(report).toContain('Bluetooth confirmed: Yes');
+    expect(report).toContain('Pairing confirmed: No');
+    expect(report).toContain('Recorder ready confirmed: No');
+    const unsafe = createDiagnosticsReport({
+      ...input,
+      device: {
+        ...device,
+        connection: {
+          stage: privateValue,
+          detail: privateValue,
+          bluetooth: false,
+          binding: false,
+          deviceReady: false,
+        },
+      },
+    });
+    expect(unsafe).not.toContain(privateValue);
+  });
   it('copies useful state without private identifiers, account details or raw errors', () => {
     const report = createDiagnosticsReport(input);
     expect(report).toContain('0.1.0');

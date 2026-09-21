@@ -148,7 +148,9 @@ export function useWorkspace(api: ApiClient, onExpired: () => void) {
         setRows(list.assignments);
         setPage(1);
         setHasMore(list.hasMore);
-        setNotice('Recorder assigned. Generate an invitation when you’re ready.');
+        setNotice(
+          'Recorder added. Choose Android or iPhone under Phone setup, then select Create setup link & QR.',
+        );
       }),
     clearInvitation: () => setInvitation(null),
     issue: (platform: EnrollmentPlatform = 'android') =>

@@ -47,6 +47,8 @@ export interface LocalRecording {
   /** null records an explicit removal; undefined is a recording without captured location. */
   location?: RecordingLocation | null;
   source?: PlaudRecordingSource;
+  /** Phone microphone recordings are owned; manual imports remain device-shared. */
+  phoneCapture?: { actorId: string; createdAt: string };
   retention?: 'temporary' | 'downloaded';
   /** Derived from the filesystem; the OS may have cleared temporary audio. */
   audioAvailable?: boolean;
@@ -194,6 +196,18 @@ export function assertLocalRecording(value: unknown): asserts value is LocalReco
     value.retention !== 'downloaded'
   )
     throw new Error('Saved recording storage preference is invalid.');
+  if (value.phoneCapture !== undefined) {
+    const capture = value.phoneCapture;
+    if (
+      value.source !== undefined ||
+      !isObject(capture) ||
+      typeof capture.actorId !== 'string' ||
+      !isRecordingId(capture.actorId) ||
+      typeof capture.createdAt !== 'string' ||
+      !Number.isFinite(Date.parse(capture.createdAt))
+    )
+      throw new Error('Saved phone recording owner is invalid.');
+  }
   if (value.source !== undefined) {
     const source = value.source;
     if (
@@ -231,4 +245,17 @@ export function assertLocalRecording(value: unknown): asserts value is LocalReco
       throw new Error('Saved transcript information is invalid.');
     }
   }
+}
+
+export function recordingOwner(
+  recording: Pick<LocalRecording, 'source' | 'phoneCapture'>,
+): string | undefined {
+  return recording.source?.actorId ?? recording.phoneCapture?.actorId;
+}
+export function visibleToActor(
+  recording: Pick<LocalRecording, 'source' | 'phoneCapture'>,
+  actorId: string | null,
+): boolean {
+  const owner = recordingOwner(recording);
+  return owner === undefined || owner === actorId;
 }

@@ -993,6 +993,24 @@ dd {
   margin-top: 14px;
   text-decoration: none;
 }
+.install-help,
+.setup-link-tools {
+  margin-top: 18px;
+}
+.install-help summary,
+.setup-link-tools summary {
+  cursor: pointer;
+  padding: 12px 0;
+  line-height: 1.5;
+}
+.setup-link-tools input {
+  width: 100%;
+  margin-top: 8px;
+}
+.setup-link-tools label {
+  display: block;
+  margin-top: 12px;
+}
 .access-form form .text-button {
   margin-top: 12px;
 }

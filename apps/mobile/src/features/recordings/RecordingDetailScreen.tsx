@@ -103,7 +103,7 @@ function RecordingDetail({ id }: { id: string }) {
       />
       <PageHeader
         title={recording.title}
-        copy={`${recording.source ? 'Received from Plaud' : 'Imported'} ${dateLabel(recording.importedAt)} · ${sizeLabel(recording.sizeBytes)}`}
+        copy={`${recording.source ? 'Received from Plaud' : recording.phoneCapture ? 'Recorded on phone' : 'Imported'} ${dateLabel(recording.importedAt)} · ${sizeLabel(recording.sizeBytes)}`}
       />
       {state.error ? (
         <Text accessibilityRole="alert" style={[styles.copy, { color: colors.danger }]}>
@@ -230,7 +230,7 @@ function RecordingDetail({ id }: { id: string }) {
       <ConfirmationDialog
         visible={confirmRemove}
         title="Delete from the app?"
-        description={`This deletes “${recording.title}”, its Aptly Able audio copy on this phone, and its local transcript, notes and locations. Source files and copies outside the app stay where they are. This release has no Aptly Able server copy to delete.`}
+        description={`This deletes “${recording.title}”, its Aptly Able audio copy on this phone, and its local transcript, notes and locations. Source files and copies outside the app stay where they are. Audio and transcripts previously uploaded for transcription remain on the server until separately deleted.`}
         confirmLabel="Delete recording"
         cancelLabel="Keep recording"
         loading={removing}

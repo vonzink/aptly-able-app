@@ -1,15 +1,11 @@
 import { RecorderPhoto } from '../recorder/RecorderPhoto';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button, Card, Screen } from '../../ui/components';
 import { fontFamily, useTheme } from '../../ui/theme';
-import {
-  getInitialEnrollmentLink,
-  subscribeToEnrollmentLinks,
-} from '../../services/enrollment-links';
 import { LocalAccessCard } from '../session/LocalAccessCard';
 import { parseEnrollmentInput } from './enrollment-link';
 import { useEnrollmentController, useEnrollmentSnapshot } from './use-enrollment';
@@ -22,33 +18,6 @@ export default function EnrollmentScreen() {
   const [manual, setManual] = useState('');
   const [inputMessage, setInputMessage] = useState<string | null>(null);
   const needsSignIn = state.phase === 'signed-out' || state.phase === 'signing-in';
-
-  useEffect(() => {
-    let mounted = true;
-    const accept = (value: string) => {
-      if (!mounted) return;
-      const parsed = parseEnrollmentInput(value);
-      if (parsed.ok) {
-        setInputMessage(null);
-        controller.receiveInvitation(parsed.token);
-        if (controller.getSnapshot().actorId) void controller.resolveInvitation();
-      } else {
-        setInputMessage(
-          parsed.reason === 'query-token'
-            ? 'For your privacy, invitation tokens in query strings are not accepted.'
-            : 'This invitation is not valid. Paste the full invitation link or code.',
-        );
-      }
-    };
-    void getInitialEnrollmentLink().then((value) => {
-      if (value) accept(value);
-    });
-    const unsubscribe = subscribeToEnrollmentLinks(accept);
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, [controller]);
 
   const acceptManual = () => {
     const parsed = parseEnrollmentInput(manual);
@@ -89,12 +58,21 @@ export default function EnrollmentScreen() {
             message={state.message}
             onSubmit={(code, email, expiresAt) => void controller.signIn(code, email, expiresAt)}
           />
-          <InvitationEntry
-            value={manual}
-            message={inputMessage}
-            onChange={setManual}
-            onSubmit={acceptManual}
-          />
+          {state.hasInvitation ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[styles.cardCopy, { color: colors.mintInk }]}
+            >
+              Invitation received. Sign in above to continue setting up your recorder.
+            </Text>
+          ) : (
+            <InvitationEntry
+              value={manual}
+              message={inputMessage}
+              onChange={setManual}
+              onSubmit={acceptManual}
+            />
+          )}
         </>
       ) : null}
 
@@ -256,12 +234,34 @@ function InvitationEntry({
   onSubmit(): void;
 }) {
   const { colors } = useTheme();
+  const [workspaceError, setWorkspaceError] = useState(false);
+  async function openWorkspace() {
+    setWorkspaceError(false);
+    try {
+      await Linking.openURL('https://plaud.aptlyable.info/');
+    } catch {
+      setWorkspaceError(true);
+    }
+  }
   return (
     <Card style={styles.entry}>
       <Text style={[styles.entryTitle, { color: colors.ink }]}>Invitation</Text>
       <Text style={[styles.cardCopy, { color: colors.inkSecondary }]}>
-        Open the QR from your dashboard with your phone camera, or paste your invitation link here.
+        Open your setup link on this phone, scan a QR shown on another screen, or paste the link
+        below. Need an invitation? Add your recorder in the website’s recorder workspace; a computer
+        is optional.
       </Text>
+      <Button
+        variant="text"
+        label="Get a setup link on this phone"
+        onPress={() => void openWorkspace()}
+      />
+      {workspaceError && (
+        <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>
+          Open plaud.aptlyable.info in your phone’s browser, sign in, then add your recorder and
+          create its setup link.
+        </Text>
+      )}
       <TextInput
         accessibilityLabel="Invitation link or code"
         autoCapitalize="none"

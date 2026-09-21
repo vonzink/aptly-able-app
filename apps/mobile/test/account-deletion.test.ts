@@ -143,6 +143,7 @@ describe('account deletion workflow', () => {
 describe('local account cleanup', () => {
   function library(unavailableCount = 0) {
     return {
+      clearAccountPhoneDrafts: vi.fn(async (_actorId: string) => {}),
       clearAccountLocations: vi.fn(async (_actorId: string) => {}),
       reload: vi.fn(async () => {}),
       getSnapshot: () => ({
@@ -153,6 +154,8 @@ describe('local account cleanup', () => {
           { id: 'a', source: { actorId: 'alice' } },
           { id: 'b', source: { actorId: 'bob' } },
           { id: 'manual' },
+          { id: 'alice-phone', phoneCapture: { actorId: 'alice' } },
+          { id: 'bob-phone', phoneCapture: { actorId: 'bob' } },
         ],
       }),
       remove: vi.fn(async () => true),
@@ -161,7 +164,8 @@ describe('local account cleanup', () => {
   it('preserves other accounts and manually imported files', async () => {
     const fake = library();
     await removeAccountRecordings(fake as unknown as RecordingsController, 'alice');
-    expect(fake.remove.mock.calls).toEqual([['a']]);
+    expect(fake.remove.mock.calls).toEqual([['a'], ['alice-phone']]);
+    expect(fake.clearAccountPhoneDrafts).toHaveBeenCalledWith('alice');
     expect(fake.clearAccountLocations).toHaveBeenCalledWith('alice');
   });
   it('does not claim completion with unreadable library entries', async () => {

@@ -1,5 +1,7 @@
 # Apple and Google release readiness
 
+**Current status (September 18):** see [submission gates and SDK intake](2026-09-18-submission-gates.md). The official Plaud repository now resolves and its release labeled 1.0.57 was inspected. Its ARM64 LAME codec still fails 16 KB ELF checks; the candidate also removes types used by our bridge. It was not installed. Use the [updated vendor request](../operations/plaud-sdk-submission-request.md), not the historical 404 request below. New microphone/location/Live Activity work also needs final-build review.
+
 Date: 2026-09-15. Baseline: `eed0214`; implementation branch: `codex/cross-store-readiness`.
 
 Subsequent integration: these reviewed changes were merged to `main` and deployed

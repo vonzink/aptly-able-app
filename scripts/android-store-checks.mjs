@@ -5,6 +5,8 @@ const allowedPermissions = new Set(
     'INTERNET',
     'FOREGROUND_SERVICE',
     'FOREGROUND_SERVICE_LOCATION',
+    'FOREGROUND_SERVICE_MICROPHONE',
+    'RECORD_AUDIO',
     'POST_NOTIFICATIONS',
     'MODIFY_AUDIO_SETTINGS',
     'VIBRATE',
@@ -85,6 +87,8 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
     INTERNET: [24, Infinity],
     FOREGROUND_SERVICE: [28, Infinity],
     FOREGROUND_SERVICE_LOCATION: [34, Infinity],
+    FOREGROUND_SERVICE_MICROPHONE: [34, Infinity],
+    RECORD_AUDIO: [24, Infinity],
     POST_NOTIFICATIONS: [33, Infinity],
     BLUETOOTH: [24, 30],
     BLUETOOTH_ADMIN: [24, 30],
@@ -118,6 +122,15 @@ export function inspectAndroidManifest(document, { origin, version, versionCode 
     locationService.$['android:foregroundServiceType'] !== 'location'
   )
     errors.push('Recording location service must be present, private, and location-only.');
+  const audioService = (app.service ?? []).find(
+    (row) => row.$?.['android:name'] === 'expo.modules.audio.service.AudioRecordingService',
+  );
+  if (
+    !audioService ||
+    audioService.$['android:exported'] !== 'false' ||
+    audioService.$['android:foregroundServiceType'] !== 'microphone'
+  )
+    errors.push('Phone recording service must be present, private, and microphone-only.');
   const metadata = Object.fromEntries(
     (app['meta-data'] ?? []).map((row) => [row.$?.['android:name'], row.$?.['android:value']]),
   );

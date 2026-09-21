@@ -50,16 +50,35 @@ export function inspectApp({
     );
   if (info.AptlyPlaudWifiTransferEnabled !== wifi)
     errors.push('Archived Wi-Fi transfer flag differs from selected profile.');
+  if (
+    info.NSSupportsLiveActivities !== true ||
+    info.ExpoWidgetsAppGroupIdentifier !== 'group.com.aptlyable.mobile'
+  )
+    errors.push(
+      'Phone recording Live Activity configuration is missing; regenerate native config.',
+    );
+  const widget = join(app, 'PlugIns', 'ExpoWidgetsTarget.appex');
+  if (
+    !existsSync(join(widget, 'Info.plist')) ||
+    plist(join(widget, 'Info.plist')).CFBundleIdentifier !==
+      'com.aptlyable.mobile.RecordingActivity'
+  )
+    errors.push(
+      'Phone recording Live Activity extension is missing or has an unexpected identity.',
+    );
   if ('NSFaceIDUsageDescription' in info)
     errors.push('Unused NSFaceIDUsageDescription is still bundled; regenerate native config.');
   for (const key of [
+    'NSMicrophoneUsageDescription',
     'NSLocationWhenInUseUsageDescription',
     'NSLocationAlwaysAndWhenInUseUsageDescription',
   ])
     if (typeof info[key] !== 'string' || !info[key].trim())
-      errors.push(`Missing ${key} for optional recording location; regenerate native config.`);
+      errors.push(`Missing ${key} for recording features; regenerate native config.`);
   if (!Array.isArray(info.UIBackgroundModes) || !info.UIBackgroundModes.includes('location'))
     errors.push('Recording location background mode is missing; regenerate native config.');
+  if (!Array.isArray(info.UIBackgroundModes) || !info.UIBackgroundModes.includes('audio'))
+    errors.push('Phone recording audio background mode is missing; regenerate native config.');
   if (
     !existsSync(join(app, 'main.jsbundle')) ||
     !readFileSync(join(app, 'main.jsbundle')).includes(origin)
@@ -84,6 +103,12 @@ export function inspectApp({
   // Required-reason coverage, actual SDK provenance and Apple validation still apply.
   // https://github.com/react-native-community/discussions-and-proposals/discussions/776
   if (!unsigned) {
+    if (
+      !signedEntitlements?.['com.apple.security.application-groups']?.includes(
+        'group.com.aptlyable.mobile',
+      )
+    )
+      errors.push('Signing profile must include the recording Live Activity app group.');
     if (!signedEntitlements || signedEntitlements['get-task-allow'] !== false)
       errors.push(
         'Distribution entitlements must explicitly set get-task-allow=false; development/unsigned archives cannot be exported as approved distribution artifacts.',

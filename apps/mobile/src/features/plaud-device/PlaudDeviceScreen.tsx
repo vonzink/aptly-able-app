@@ -17,6 +17,7 @@ import { usePlaudSync } from './PlaudSyncProvider';
 import { PlaudDeviceStatus } from './PlaudDeviceStatus';
 import type { PlaudDevicePhase } from './plaud-device-controller';
 import { usePlaudDevice } from './use-plaud-device';
+import { connectionProgress } from './connection-diagnostics';
 
 const progress: Partial<Record<PlaudDevicePhase, { title: string; copy: string }>> = {
   preparing: {
@@ -172,6 +173,13 @@ export default function PlaudDeviceScreen() {
               ]}
             >
               <Text style={[styles.copy, { color: colors.ink }]}>{snapshot.message}</Text>
+              {snapshot.phase === 'error' && snapshot.pairingAttempted && (
+                <Button
+                  variant="text"
+                  label="Open setup details in Settings"
+                  onPress={() => router.push('/settings')}
+                />
+              )}
             </View>
           ) : null}
 
@@ -208,7 +216,20 @@ export default function PlaudDeviceScreen() {
             <Card style={styles.card}>
               <ActivityIndicator color={colors.accent} />
               <Text style={[styles.cardTitle, { color: colors.ink }]}>{waiting.title}</Text>
-              <Text style={[styles.copy, { color: colors.inkSecondary }]}>{waiting.copy}</Text>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[styles.copy, { color: colors.inkSecondary }]}
+              >
+                {snapshot.phase === 'connecting'
+                  ? connectionProgress(snapshot.connection)
+                  : waiting.copy}
+              </Text>
+              {snapshot.phase === 'connecting' && (
+                <Text style={[styles.copy, { color: colors.inkSecondary }]}>
+                  Keep the recorder beside your phone and internet access on. This attempt stops
+                  after 30 seconds if setup is not confirmed. You can cancel and retry.
+                </Text>
+              )}
               <Button label="Cancel" variant="text" onPress={() => controller.cancel()} />
             </Card>
           ) : snapshot.phase === 'found' ? (
@@ -235,6 +256,14 @@ export default function PlaudDeviceScreen() {
             </>
           ) : activeOperation && !snapshot.release?.device && snapshot.phase !== 'unpaired' ? (
             <>
+              <Text style={[styles.copy, { color: colors.inkSecondary }]}>
+                {snapshot.assignment?.model === 'notepins' ||
+                enrollment.preview?.recorder.model === 'notepins'
+                  ? 'Charge your NotePin S, briefly press its button to wake it, and look for the white light before searching.'
+                  : 'Charge and wake your recorder before searching. For NotePin S, briefly press its button and look for the white light.'}{' '}
+                If it is paired to the Plaud app or another account, unpair it there first while the
+                recorder is nearby. Keep internet and Bluetooth on.
+              </Text>
               <Text style={[styles.copy, { color: colors.inkSecondary }]}>
                 {Platform.OS === 'android'
                   ? 'Keep your recorder powered on and nearby. Before searching, review the Bluetooth and location access needed by the Plaud SDK. Only your assigned recorder will appear.'

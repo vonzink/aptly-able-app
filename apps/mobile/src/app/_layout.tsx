@@ -1,3 +1,5 @@
+import { PhoneRecordingBanner } from '../features/phone-recording/PhoneRecordingBanner';
+import { useHasPhoneRecordingDraft } from '../features/phone-recording/PhoneRecordingProvider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +10,7 @@ import { RecordingActivityBanner } from '../features/plaud-device/RecordingActiv
 
 function Navigation() {
   const { colors, dark } = useTheme();
+  const hasPhoneRecording = useHasPhoneRecordingDraft();
   const icons = {
     index: 'home-outline',
     recordings: 'list-outline',
@@ -17,7 +20,8 @@ function Navigation() {
   return (
     <>
       <StatusBar style={dark ? 'light' : 'dark'} />
-      <RecordingActivityBanner />
+      <PhoneRecordingBanner />
+      <RecordingActivityBanner topInset={!hasPhoneRecording} />
       <Tabs
         screenOptions={({ route }) => ({
           headerShown: false,
@@ -45,6 +49,7 @@ function Navigation() {
         <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
         <Tabs.Screen name="enroll" options={{ href: null }} />
         <Tabs.Screen name="recording" options={{ href: null }} />
+        <Tabs.Screen name="phone-recording" options={{ href: null }} />
         <Tabs.Screen name="privacy" options={{ href: null }} />
         <Tabs.Screen name="support" options={{ href: null }} />
         <Tabs.Screen name="delete-account" options={{ href: null }} />

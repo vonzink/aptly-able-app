@@ -47,7 +47,23 @@ const config: ExpoConfig = {
     ['expo-secure-store', { faceIDPermission: false, configureAndroidBackup: false }],
     [
       'expo-audio',
-      { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: false },
+      {
+        microphonePermission:
+          'Aptly Able uses your microphone when you choose Record audio. Recording continues while the screen is locked until you stop it.',
+        recordAudioAndroid: true,
+        enableBackgroundRecording: true,
+        enableBackgroundPlayback: false,
+      },
+    ],
+    [
+      'expo-widgets',
+      {
+        bundleIdentifier: 'com.aptlyable.mobile.RecordingActivity',
+        groupIdentifier: 'group.com.aptlyable.mobile',
+        enablePushNotifications: false,
+        frequentUpdates: false,
+        widgets: [],
+      },
     ],
     './plugins/withStoreReadiness.cjs',
     './plugins/withAndroidReadiness.cjs',

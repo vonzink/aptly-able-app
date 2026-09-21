@@ -60,6 +60,7 @@ export function readinessErrors(metadata, evidenceExists) {
   for (const key of [
     'privacyPolicyReviewed',
     'providerPrivacyReviewed',
+    'providerDistributionReviewed',
     'providerErasureVerified',
     'backupRetentionReviewed',
     'hardwareReviewVerified',
@@ -71,7 +72,7 @@ export function readinessErrors(metadata, evidenceExists) {
   }
   if (!metadata.providerEvidencePath || !evidenceExists(metadata.providerEvidencePath))
     errors.push(
-      'Supply providerEvidencePath pointing to a real vendor review record covering exact Plaud versions, required-reason APIs, SDK privacy/signatures, endpoints, retention and erasure; absence of a Plaud manifest is not itself proof of compliance.',
+      'Supply providerEvidencePath pointing to a real vendor review record covering exact Plaud versions/hashes, binary distribution licenses and support, required-reason APIs, SDK privacy/signatures, endpoints, retention and erasure; absence of a Plaud manifest is not itself proof of compliance.',
     );
   return errors;
 }

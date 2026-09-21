@@ -1,4 +1,23 @@
 {
+  "ios": {
+    "source": "https://github.com/Plaud-AI/embedded-react-native",
+    "sourceCommit": "31a3de0c3fe3f4c95142592e942449bf6db4122f",
+    "provenance": "UPSTREAM.md",
+    "binaries": [
+      {
+        "path": "ios/Frameworks/PlaudBleSDK.xcframework/ios-arm64/PlaudBleSDK.framework/PlaudBleSDK",
+        "sha256": "55487f135ef2c33a1cc6433017ca5c4c7df42f1140b82aa860cdace5bb8f3154"
+      },
+      {
+        "path": "ios/Frameworks/PlaudWiFiSDK.xcframework/ios-arm64/PlaudWiFiSDK.framework/PlaudWiFiSDK",
+        "sha256": "b468530d7904b358e805da2a2ddfc31cc21a001622a45a61aac6d838086d4698"
+      },
+      {
+        "path": "ios/Frameworks/PlaudDeviceBasicSDK.xcframework/ios-arm64/PlaudDeviceBasicSDK.framework/PlaudDeviceBasicSDK",
+        "sha256": "7574af368aee4c22cf92b1747c01e90a2c8ecd2a15e38e22b5d89a0916e0a2f8"
+      }
+    ]
+  },
   "android": {
     "path": "android/libs/plaud-sdk.aar",
     "sha256": "d342c8ca58a7326fb4f11e73ce23e00ae21a83c4bc399d869835e14013c6ab02",

@@ -1,5 +1,7 @@
 # Android SDK provenance
 
+**September 18 status:** the official repository is now accessible. Its release labeled 1.0.57 was inspected in quarantine, not installed. ARM64 `liblame.so` still fails 16 KB ELF checks and two current bridge types are absent. The installed hash below remains unchanged. See [the current intake report](../../../../../../docs/verification/2026-09-18-submission-gates.md) and [vendor request](../../../../../../docs/operations/plaud-sdk-submission-request.md). The 404 and initial build notes below describe the September 14 investigation.
+
 Retrieved 2026-09-14 for local integration and physical-device testing.
 
 - File: `plaud-sdk.aar` (2,836,768 bytes).

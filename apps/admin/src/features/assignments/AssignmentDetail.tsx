@@ -4,9 +4,9 @@ import type { Workspace } from './use-workspace';
 import { dateLabel, invitationState, recorderName } from './presentation';
 import { Confirmation } from '../../ui/Confirmation';
 import { RecorderPhoto } from './RecorderPhoto';
+import { SetupLinkFallback } from '../../ui/SetupLinkFallback';
 export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now: number }) {
   const [confirm, setConfirm] = useState<'replace' | 'revoke' | 'release' | 'end' | null>(null);
-  const [copied, setCopied] = useState(false);
   const [platform, setPlatform] = useState<EnrollmentPlatform>('android');
   const detail = workspace.detail;
   if (!detail)
@@ -14,7 +14,7 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
       <aside className="detail-empty panel">
         <img src="/plaud-recorder.png" alt="" />
         <h2>A clear start for every recorder</h2>
-        <p>Select an assignment to manage its invitation and follow setup.</p>
+        <p>Select a recorder to manage its setup link and follow setup.</p>
       </aside>
     );
   const state = invitationState(detail.latestInvitation, now);
@@ -29,7 +29,6 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
   const confirmAction = () => {
     const action = confirm;
     setConfirm(null);
-    setCopied(false);
     if (action === 'replace') void workspace.issue(platform);
     if (action === 'revoke') void workspace.revoke();
     if (action === 'release') void workspace.end('released');
@@ -51,13 +50,17 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
       </div>
       <div className="detail-body">
         <div className="section-heading">
-          <h3>Enrollment invitation</h3>
+          <h3>Phone setup</h3>
           <span className={`status status-${state.toLowerCase().replaceAll(' ', '-')}`}>
             {state}
           </span>
         </div>
         {qr ? (
           <div className="invitation">
+            <a className="button primary full" href={qr.enrollmentUrl}>
+              Continue on this phone
+            </a>
+            <p>Using a computer? Scan this QR with your phone camera instead.</p>
             <img
               className="qr"
               src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr.qrSvg)}`}
@@ -69,30 +72,7 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
                 : `Scan with your ${platform === 'android' ? 'Android phone' : 'iPhone'} to install Aptly Able and continue setup.`}
             </p>
             <p className="fineprint">Expires {dateLabel(qr.expiresAt)}</p>
-            <div className="button-row">
-              <button
-                disabled={workspace.busy}
-                onClick={() => {
-                  setCopied(false);
-                  void navigator.clipboard.writeText(qr.enrollmentUrl).then(
-                    () => setCopied(true),
-                    () => setCopied(false),
-                  );
-                }}
-              >
-                {copied ? 'Link copied' : 'Copy setup link'}
-              </button>
-              {!opensInstalledApp && (
-                <a
-                  className="button"
-                  href={qr.enrollmentUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open setup
-                </a>
-              )}
-            </div>
+            <SetupLinkFallback key={qr.id} link={qr.enrollmentUrl} />
           </div>
         ) : (
           <div className="invitation-placeholder">
@@ -112,6 +92,11 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
         )}
         {active && (
           <>
+            {detail.latestOperation?.status === 'pending' && (
+              <a className="button primary full" href="aptlyable://recorder">
+                Open Recorder in the app
+              </a>
+            )}
             <fieldset className="platform-picker" disabled={workspace.busy}>
               <legend>Phone for this invitation</legend>
               {(['android', 'ios'] as const).map((value) => (
@@ -122,7 +107,6 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
                     checked={platform === value}
                     onChange={() => {
                       setPlatform(value);
-                      setCopied(false);
                       workspace.clearInvitation();
                     }}
                   />
@@ -131,7 +115,9 @@ export function AssignmentDetail({ workspace, now }: { workspace: Workspace; now
               ))}
             </fieldset>
             <button className="primary full" onClick={askIssue} disabled={workspace.busy}>
-              {detail.latestInvitation ? 'Generate replacement QR' : 'Generate enrollment QR'}
+              {detail.latestInvitation
+                ? 'Create replacement setup link & QR'
+                : 'Create setup link & QR'}
             </button>
             {detail.latestInvitation && !detail.latestInvitation.revokedAt && (
               <button

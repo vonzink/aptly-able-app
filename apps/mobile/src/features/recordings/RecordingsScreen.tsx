@@ -110,6 +110,7 @@ export default function RecordingsScreen() {
                 </Pressable>
               ) : null}
             </View>
+            <Button label="Record audio" onPress={() => router.push('/phone-recording')} />
             <RecorderSyncCard />
             <View style={styles.tools}>
               <View style={styles.importAction}>
@@ -136,8 +137,8 @@ export default function RecordingsScreen() {
             {!actorId ? (
               <Card style={styles.notice}>
                 <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-                  Sign in to see your saved Plaud recordings. Imported audio on this device is still
-                  available.
+                  Sign in to see your saved phone and Plaud recordings. Imported audio on this
+                  device is still available.
                 </Text>
                 <Button label="Sign in" variant="text" onPress={() => router.push('/enroll')} />
               </Card>
@@ -212,7 +213,7 @@ export default function RecordingsScreen() {
               title="Your library is ready"
               copy={
                 actorId
-                  ? 'Finish a recording, then keep your Plaud connected and this app open. Your audio will appear here automatically.'
+                  ? 'Record with your phone, import audio, or connect your Plaud to receive recordings automatically.'
                   : 'You can import an audio file now, or sign in above to connect your Plaud recorder.'
               }
               action={

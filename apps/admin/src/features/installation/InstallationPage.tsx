@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type EnrollmentPlatform } from '@aptly/contracts';
 import { installationDownload, installationLink } from './installation-link';
+import { SetupLinkFallback } from '../../ui/SetupLinkFallback';
 
 export function InstallationPage() {
   const [link] = useState(() => installationLink(window.location.href));
@@ -32,8 +33,8 @@ export function InstallationPage() {
         ) : (
           <>
             <p>
-              Keep this page open while you install the app. Then come back here to connect your
-              recorder.
+              You can finish everything on this phone. Keep this page open while you install the
+              app, then return to step 2. If the app is already installed, start at step 2.
             </p>
             <fieldset className="platform-picker">
               <legend>Your phone</legend>
@@ -57,7 +58,7 @@ export function InstallationPage() {
                   <>
                     <p>
                       {platform === 'android'
-                        ? 'Download Aptly Able, open the downloaded APK, and allow your browser to install it when Android asks.'
+                        ? 'On this phone, tap Download for Android. Open the completed download (aptly-able-android.apk) from your browser’s Downloads and tap Install. Downloading the file alone does not install the app.'
                         : 'Open the invitation in TestFlight and install Aptly Able. Install Apple’s TestFlight app first if prompted.'}
                     </p>
                     <a
@@ -68,6 +69,21 @@ export function InstallationPage() {
                     >
                       {platform === 'android' ? 'Download for Android' : 'Install with TestFlight'}
                     </a>
+                    {platform === 'android' && (
+                      <details className="install-help">
+                        <summary>Android blocked the installation?</summary>
+                        <p>
+                          This pilot uses an APK rather than Google Play. Android may ask you to
+                          allow this browser to install apps. Samsung may also show an Auto Blocker
+                          notice. Only proceed if you trust this Aptly Able download; you can leave
+                          your phone’s protections enabled and ask us for help instead.
+                        </p>
+                        <p>
+                          If you change an installation setting, restore it after installation.
+                          Confirm that the Aptly Able icon appears and opens before continuing.
+                        </p>
+                      </details>
+                    )}
                   </>
                 ) : (
                   <p className="notice notice-neutral">
@@ -77,20 +93,37 @@ export function InstallationPage() {
                 )}
               </li>
               <li>
-                <h2>Return here and continue</h2>
+                <h2>Open your invitation in the app</h2>
                 <p>
-                  After installation, return to this browser page and tap the button below. Sign in
-                  with the account you used in the dashboard.
+                  Return to this page and tap the button below. Sign in with the same account you
+                  used on this website. Your invitation should already be received; you do not need
+                  another QR code or a computer.
                 </p>
                 <a className="button primary full" href={link.appUrl}>
                   Continue setup in Aptly Able
                 </a>
+                <details className="install-help">
+                  <summary>App did not open, or Invitation is blank?</summary>
+                  <p>
+                    Copy the setup link below. Open the Aptly Able app, choose Recorder → Open
+                    recorder enrollment, and paste it into Invitation. Tap Use invitation, then
+                    Continue setup.
+                  </p>
+                  <SetupLinkFallback link={link.appUrl} />
+                </details>
               </li>
               <li>
                 <h2>Connect your recorder</h2>
                 <p>
-                  Keep your NotePin S powered on and nearby. Allow Bluetooth access in Aptly Able,
-                  then tap Connect recorder.
+                  Charge your recorder and keep it beside the phone. For NotePin S, briefly press
+                  its button to wake it; look for the white light. If it is paired to the Plaud app
+                  or another account, unpair it there first while it is nearby.
+                </p>
+                <p>
+                  Keep internet and Bluetooth on. In Aptly Able, allow the requested recorder
+                  permissions, tap Search for my recorder, then Connect assigned recorder. Wait for
+                  “Connected and ready.” If setup fails, open Settings → Copy setup details and
+                  share that report with support.
                 </p>
               </li>
             </ol>

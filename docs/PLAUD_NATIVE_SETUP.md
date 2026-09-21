@@ -10,7 +10,7 @@ https://github.com/Plaud-AI/embedded-react-native
 
 Its `modules/plaud-sdk` is copied into `apps/mobile/modules/plaud-sdk`, pinned to commit `31a3de0c3fe3f4c95142592e942449bf6db4122f`. It contains the iOS frameworks, their resource bundle, Swift/Kotlin bridges and TypeScript interface. See the local module's `UPSTREAM.md` for provenance.
 
-The older `Plaud-AI/plaud-sdk-public` repository returned 404 from GitHub's public repository API. This confirms the download problem, but does not establish whether Plaud removed, renamed or made that repository private.
+The older `Plaud-AI/plaud-sdk-public` repository returned 404 during the original setup. **September 18 update:** it is now public, with a release labeled 1.0.57. The official AAR was downloaded separately and inspected; it still fails ARM64 codec alignment and is not a drop-in bridge replacement. See [current SDK intake and submission gates](verification/2026-09-18-submission-gates.md). The installed SDK below is unchanged.
 
 **Android SDK recovered (2026-09-14):** the official integration repositories omit their documented Android binary. A copy labeled SDK 1.0.13 was downloaded from the public `JinpeiHan/plaud-sdk` fork, pinned to commit `c5111a44938b8739313dcb5f105f696c6af8ad8d`, and placed at:
 

@@ -1,3 +1,4 @@
+import type { PhoneRecordingAudio } from '../phone-recording/phone-recording-model';
 import { readRecordingLocation } from '../recording-location/location-model';
 import type { RecordingLocationArchive } from '../recording-location/location-port';
 import {
@@ -29,6 +30,8 @@ export interface RecordingsController {
   initialize(): Promise<void>;
   reload(): Promise<void>;
   importAudio(input: AudioImport): Promise<string | null>;
+  savePhoneRecording(audio: PhoneRecordingAudio, stillOwner: () => boolean): Promise<string | null>;
+  clearAccountPhoneDrafts(actorId: string): Promise<void>;
   importDeviceAudio(input: AudioImport, source: PlaudRecordingSource): Promise<string | null>;
   isSourceDismissed(source: PlaudRecordingSource): Promise<boolean>;
   keepOnPhone(id: string): Promise<boolean>;
@@ -49,11 +52,13 @@ export function createRecordingsController({
   createId,
   now,
   locations,
+  phoneDrafts,
 }: {
   store: RecordingStore;
   createId: () => string;
   now: () => string;
   locations?: RecordingLocationArchive;
+  phoneDrafts?: { clearActor(actorId: string): Promise<void> };
 }): RecordingsController {
   let snapshot: RecordingsSnapshot = {
     recordings: [],
@@ -238,6 +243,50 @@ export function createRecordingsController({
     },
     reload,
     importAudio: (input) => importAudio(input),
+    savePhoneRecording(audio, stillOwner) {
+      return run(
+        async () => {
+          await refreshLibrary();
+          if (!stillOwner())
+            throw new Error('Sign in to the recording owner account before saving.');
+          const existing = snapshot.recordings.find((record) => record.id === audio.id);
+          if (existing) {
+            if (
+              existing.phoneCapture?.actorId !== audio.actorId ||
+              existing.sizeBytes !== audio.input.sizeBytes
+            )
+              throw new Error('The saved recording does not match this phone recording.');
+            return existing.id;
+          }
+          const record: LocalRecording = {
+            id: audio.id,
+            title: `Phone recording ${new Date(audio.createdAt).toLocaleString()}`,
+            originalName: audio.input.name,
+            importedAt: audio.createdAt,
+            mimeType: validateAudioImport(audio.input),
+            sizeBytes: audio.input.sizeBytes,
+            durationSeconds: audio.durationSeconds,
+            transcript: null,
+            phoneCapture: { actorId: audio.actorId, createdAt: audio.createdAt },
+          };
+          assertLocalRecording(record);
+          await store.saveAudio(record, audio.input);
+          publish({ recordings: [record, ...snapshot.recordings] });
+          return record.id;
+        },
+        null,
+        'The recording could not be saved. Retry without discarding it.',
+      );
+    },
+    clearAccountPhoneDrafts: (actorId) => {
+      // Share the library queue with saves: deletion cannot race a pending commit.
+      const task = queue.then(() => phoneDrafts?.clearActor(actorId));
+      queue = task.then(
+        () => undefined,
+        () => undefined,
+      );
+      return task.then(() => undefined);
+    },
     importDeviceAudio: (input, source) => importAudio(input, source),
     isSourceDismissed: (source) => store.deviceAudio?.isDismissed(source) ?? Promise.resolve(false),
     keepOnPhone(id) {

@@ -1,3 +1,4 @@
+import { PhoneRecordingProvider } from '../features/phone-recording/PhoneRecordingProvider';
 import { RecordingLocationProvider } from '../features/recording-location/RecordingLocationProvider';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
@@ -36,6 +37,8 @@ import { SessionRestoration } from '../features/session/SessionRestoration';
 import { RecordingsProvider } from '../features/recordings/RecordingsProvider';
 import { PlaudSyncProvider } from '../features/plaud-device/PlaudSyncProvider';
 import { enrollmentJournal } from '../services/enrollment-journal';
+import { getInitialEnrollmentLink, subscribeToEnrollmentLinks } from '../services/enrollment-links';
+import { attachEnrollmentLinks } from '../features/enrollment/enrollment-link-intake';
 import { plaudNative } from '../services/plaud-native';
 import {
   createPlaudDeviceController,
@@ -137,6 +140,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   const sessionLifecycle = useMemo(() => createReplaySafeLifecycle(clients.session), [clients]);
+  useEffect(
+    () =>
+      attachEnrollmentLinks(enrollmentController, {
+        initial: getInitialEnrollmentLink,
+        subscribe: subscribeToEnrollmentLinks,
+      }),
+    [enrollmentController],
+  );
   useEffect(() => sessionLifecycle.setup(), [sessionLifecycle]);
   useEffect(() => lifecycle.setup(), [lifecycle]);
   useEffect(() => {
@@ -220,7 +231,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                             onRetry={() => void enrollmentController.restoreSession()}
                             onSignOut={() => void enrollmentController.signOut()}
                           >
-                            {children}
+                            <PhoneRecordingProvider>{children}</PhoneRecordingProvider>
                           </SessionRestoration>
                         </PlaudSyncProvider>
                       </RecordingsProvider>

@@ -9,6 +9,8 @@ export interface PlaudNativeEvents {
   scanResult: { devices: PlaudNearbyDevice[] };
   scanTimeout: { reason?: string };
   connectState: { connected: boolean; failed: boolean; state: number };
+  /** Optional Android progress; never a substitute for connection/bind/pen-state confirmation. */
+  connectStage: { stage: string; detail: string | null };
   bind: { sn: string | null; status: number; protVersion: number };
   penState: { state: number; privacy: number; keyState: number; uDisk: number };
   depair: { status: number };
