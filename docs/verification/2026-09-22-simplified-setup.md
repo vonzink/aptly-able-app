@@ -1,5 +1,10 @@
 # Simpler recorder setup — September 22, 2026
 
+Publication follow-up: this work shipped in **0.1.2 (11)** on September 22.
+The API/migration, website and Android download are deployed. See the
+[build 11 deployment verification](2026-09-22-build11-deployment.md). The rollout
+notes below describe the original preparation state.
+
 ## Implemented flow
 
 1. Open the website and select **Get the phone app**; no invitation or website account is required to reach the installation page.
@@ -47,7 +52,9 @@ Compared the current bridge/controller against Plaud's official [Android SDK](ht
 
 ## Rollout dependency
 
-This work is local and has not changed the live website or downloadable build 10.
+At the time of the initial implementation, this work was local and the public
+download remained build 10. The API, website and Android rollout below has since
+completed for build 11; iOS distribution and physical acceptance remain pending.
 
 1. Deploy the API and migration 007 first. Verify the new authenticated routes and existing invitation/unpair routes.
 2. Prepare new iOS/Android installers with a new build number and the public API origin. Do not overwrite a published build number or distribute the local preview export.
