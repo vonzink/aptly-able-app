@@ -83,7 +83,15 @@ This is a configuration migration; the app and dashboard stay one codebase.
 
 ## Status
 
-Latest: September 15, 2026, Amplify job **8 SUCCEED**, Android **0.1.2 (8)**.
+Latest: September 21, 2026, Amplify job **9 SUCCEED**, Android **0.1.2 (10)**.
+The website and Android download include the improved phone-only setup flow,
+enrollment handoff, connection diagnostics, phone recording and optional local
+recording location. All 28 public file hashes and nine entry routes passed;
+the existing API remains healthy and did not require an update. See
+[build 10 deployment and physical-test limits](verification/2026-09-21-build10-deployment.md).
+The earlier records below are historical.
+
+September 15, 2026, Amplify job **8 SUCCEED**, Android **0.1.2 (8)**.
 The compatible backend update is live, all 25 public file hashes and nine entry
 routes passed, and existing rewrites/DNS remain unchanged. See
 [build 8 deployment and recovery](verification/2026-09-15-build8-deployment.md).

@@ -1,5 +1,10 @@
 # Jake’s Android setup feedback — 2026-09-21
 
+Publication follow-up: build **0.1.2 (10)** and the website were subsequently
+committed, pushed to `main`, and published in Amplify job **9**. See the
+[deployment verification](2026-09-21-build10-deployment.md). The investigation and
+preparation notes below describe the state before that publication.
+
 ## Evidence and scope
 
 Reviewed the complete text and relevant embedded screenshots in the supplied
