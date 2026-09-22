@@ -67,7 +67,7 @@ export function PilotAccessCard({
       <Text style={[styles.copy, { color: colors.inkSecondary }]}>
         {mode === 'register'
           ? 'One account for your recorder, this app and the web dashboard.'
-          : 'Use the same email and password as the web dashboard.'}
+          : 'Use your Aptly Able account. New here? Create one below.'}
       </Text>
       {mode === 'register' && (
         <View style={styles.field}>

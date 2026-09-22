@@ -71,6 +71,9 @@ function fakeClient(overrides: Partial<ApiClient> = {}): ApiClient {
     claimEnrollment: async () => operation,
     getClaimOperation: async () => operation,
     getOperation: async () => operation,
+    myRecorders: async () => ({ recorders: [], canAdd: true }),
+    addMyRecorder: unused,
+    beginRecorderSetup: unused,
     adminUsers: unused,
     adminAssignments: unused,
     adminAssignment: unused,
@@ -104,6 +107,156 @@ function setup(client = fakeClient(), store = journal(), sessions?: SessionStore
 }
 
 describe('enrollment controller', () => {
+  it('does not begin revoked setup or allow self-add for a managed account', async () => {
+    const recorder = {
+      assignmentId,
+      recorder: preview.recorder,
+      operation: { ...operation, status: 'revoked' as const },
+      setupBlocked: true,
+    };
+    let mutations = 0;
+    const { controller } = setup(
+      fakeClient({
+        myRecorders: async () => ({ recorders: [recorder], canAdd: false }),
+        beginRecorderSetup: async () => {
+          mutations++;
+          return operation;
+        },
+        addMyRecorder: async () => {
+          mutations++;
+          return recorder;
+        },
+      }),
+    );
+    await controller.signIn('local-access');
+    await controller.selectRecorder(assignmentId);
+    await controller.addRecorder({ model: 'notepro', serial: '8810007331' });
+    expect(mutations).toBe(0);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'choosing-recorder', operation: null });
+  });
+
+  it('keeps a network failure retryable and offers invitations only for an older API', async () => {
+    let status = 503;
+    const { controller } = setup(
+      fakeClient({
+        myRecorders: async () => {
+          throw { status };
+        },
+      }),
+    );
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot().phase).toBe('account-error');
+    status = 404;
+    await controller.loadRecorders();
+    expect(controller.getSnapshot().phase).toBe('needs-invitation');
+  });
+
+  it('coalesces repeated continue taps and waits for durable setup storage', async () => {
+    const response = deferred<SetupOperation>();
+    const recorder = {
+      assignmentId,
+      recorder: preview.recorder,
+      operation: null,
+      setupBlocked: false,
+    };
+    let begins = 0;
+    const store = journal();
+    store.save = async () => {
+      throw new Error('secure storage unavailable');
+    };
+    const { controller } = setup(
+      fakeClient({
+        myRecorders: async () => ({ recorders: [recorder], canAdd: true }),
+        beginRecorderSetup: () => {
+          begins++;
+          return response.promise;
+        },
+      }),
+      store,
+    );
+    await controller.signIn('local-access');
+    const first = controller.selectRecorder(assignmentId);
+    const second = controller.selectRecorder(assignmentId);
+    expect(first).toBe(second);
+    response.resolve(operation);
+    await first;
+    expect(begins).toBe(1);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'choosing-recorder', operation: null });
+  });
+
+  it('finds an assigned recorder after sign-in without an invitation', async () => {
+    const recorder = {
+      assignmentId,
+      recorder: preview.recorder,
+      operation: null,
+      setupBlocked: false,
+    };
+    const { controller } = setup(
+      fakeClient({ myRecorders: async () => ({ recorders: [recorder], canAdd: true }) }),
+    );
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: 'choosing-recorder',
+      recorders: [recorder],
+      canAddRecorder: true,
+    });
+  });
+
+  it('restores an existing account setup on a fresh installation', async () => {
+    const { controller, store } = setup(
+      fakeClient({
+        myRecorders: async () => ({
+          recorders: [{ assignmentId, recorder: preview.recorder, operation, setupBlocked: false }],
+          canAdd: false,
+        }),
+      }),
+    );
+    await controller.signIn('local-access');
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'saved', operation });
+    expect(store.value?.operationId).toBe(operationId);
+  });
+
+  it('never restores a late lookup after sign-out', async () => {
+    const pending = deferred<{ recorders: never[]; canAdd: boolean }>();
+    const { controller } = setup(fakeClient({ myRecorders: () => pending.promise }));
+    const signingIn = controller.signIn('local-access');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await controller.signOut();
+    pending.resolve({ recorders: [], canAdd: true });
+    await signingIn;
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'signed-out', recorders: [] });
+  });
+
+  it('preserves a created recorder when the next setup request fails, so it can be retried', async () => {
+    const recorder = {
+      assignmentId,
+      recorder: preview.recorder,
+      operation: null,
+      setupBlocked: false,
+    };
+    let attempts = 0;
+    const { controller } = setup(
+      fakeClient({
+        myRecorders: async () => ({ recorders: [], canAdd: true }),
+        addMyRecorder: async () => recorder,
+        beginRecorderSetup: async () => {
+          if (++attempts === 1) throw new Error('offline');
+          return operation;
+        },
+      }),
+    );
+    await controller.signIn('local-access');
+    await controller.addRecorder({ model: 'notepro', serial: '8810007331' });
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: 'choosing-recorder',
+      recorders: [recorder],
+    });
+    await controller.selectRecorder(assignmentId);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'choosing-recorder', operation: null });
+    await controller.selectRecorder(assignmentId);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'saved', operation });
+  });
+
   it('accepts a setup link before the enrollment screen opens and retains it through sign-in', async () => {
     const resolved: string[] = [];
     const { controller } = setup(
@@ -177,7 +330,7 @@ describe('enrollment controller', () => {
     launch.resolve(`aptlyable://enroll#token=${'A'.repeat(43)}`);
     await launch.promise;
     await controller.signIn('local-access');
-    expect(controller.getSnapshot().phase).toBe('needs-invitation');
+    expect(controller.getSnapshot().phase).toBe('choosing-recorder');
   });
 
   it('can reopen the same unused invitation after signing out', async () => {
@@ -427,7 +580,7 @@ describe('enrollment controller', () => {
 
     expect(store.value).toBeNull();
     expect(controller.getSnapshot().operation).toBeNull();
-    expect(controller.getSnapshot().phase).toBe('needs-invitation');
+    expect(controller.getSnapshot().phase).toBe('choosing-recorder');
   });
 
   it('reports a revoked saved enrollment after refresh', async () => {
@@ -731,7 +884,7 @@ describe('enrollment controller', () => {
     clearing.resolve();
     await Promise.all([signingOut, signingIn]);
 
-    expect(controller.getSnapshot().phase).toBe('needs-invitation');
+    expect(controller.getSnapshot().phase).toBe('choosing-recorder');
     expect(controller.getSnapshot().actorId).toBe(actorA);
   });
   it('removes durable enrollment after unpair without signing out, and does not restore it on restart', async () => {
@@ -740,7 +893,7 @@ describe('enrollment controller', () => {
     await controller.signIn('local-user-code');
     await controller.clearAfterUnpair({ actorId: actorA, operationId });
     expect(controller.getSnapshot()).toMatchObject({
-      phase: 'needs-invitation',
+      phase: 'choosing-recorder',
       actorId: actorA,
       operation: null,
       preview: null,
@@ -757,7 +910,7 @@ describe('enrollment controller', () => {
     );
     await restarted.controller.signIn('local-user-code');
     expect(restarted.controller.getSnapshot()).toMatchObject({
-      phase: 'needs-invitation',
+      phase: 'choosing-recorder',
       operation: null,
     });
   });

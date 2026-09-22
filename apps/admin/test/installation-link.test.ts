@@ -10,17 +10,26 @@ describe('installation continuation', () => {
     for (const platform of ['android', 'ios']) {
       expect(
         installationLink(`https://pilot.example/enroll?platform=${platform}#token=${token}`),
-      ).toEqual({ platform, appUrl: `aptlyable://enroll#token=${token}` });
+      ).toEqual({ platform, appUrl: `aptlyable://enroll#token=${token}`, invitation: 'valid' });
     }
   });
-  test('rejects missing, malformed, duplicated and query-string tokens', () => {
+  test('supports installation and account setup without an invitation', () => {
+    expect(installationLink('https://pilot.example/enroll')).toEqual({
+      platform: null,
+      appUrl: 'aptlyable://recorder',
+      invitation: 'none',
+    });
+  });
+  test('rejects malformed, duplicated and query-string tokens', () => {
     for (const suffix of [
-      '',
       '#token=short',
       `?token=${token}#token=${token}`,
       `#token=${token}&token=${token}`,
     ])
-      expect(installationLink(`https://pilot.example/enroll${suffix}`).appUrl).toBeNull();
+      expect(installationLink(`https://pilot.example/enroll${suffix}`)).toMatchObject({
+        appUrl: null,
+        invitation: 'invalid',
+      });
   });
   test('missing build is unavailable and download URLs are constrained', () => {
     expect(installationDownload(undefined, 'android')).toBeNull();

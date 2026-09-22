@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ApiClient } from '@aptly/api-client';
 import { useWorkspace } from './use-workspace';
-import { invitationState, recorderName } from './presentation';
+import { invitationState, recorderName, recorderSetupState } from './presentation';
 import { AssignmentForm } from './AssignmentForm';
 import { AssignmentDetail } from './AssignmentDetail';
 export function Dashboard({
@@ -35,7 +35,7 @@ export function Dashboard({
           <p>
             {pilot ? 'Add your recorder.' : 'Assign a recorder.'}
             <br />
-            {pilot ? 'Open your setup link.' : 'Share an invitation.'}
+            {pilot ? 'Sign in on your phone.' : 'Share an invitation if needed.'}
             <br />
             Follow setup.
           </p>
@@ -46,6 +46,9 @@ export function Dashboard({
         <header className="topbar">
           <span>{pilot ? 'Your recorder workspace' : 'Administrator workspace'}</span>
           <div className="workspace-account-actions">
+            <a className="workspace-demo-link" href="/enroll">
+              Get the app
+            </a>
             <a
               className="workspace-demo-link"
               href="/dashboard"
@@ -65,7 +68,7 @@ export function Dashboard({
               <h1>{pilot ? 'Your recorder' : 'Recorder assignments'}</h1>
               <p>
                 {pilot
-                  ? 'Add your recorder and open its setup link. You can do every step on this phone; a computer is optional.'
+                  ? 'Add a recorder here or in the phone app. Sign in on your phone to find it and connect.'
                   : 'Give each person a recorder and a clear way to get started.'}
               </p>
             </div>
@@ -111,7 +114,7 @@ export function Dashboard({
                     <thead>
                       <tr>
                         <th>Person & recorder</th>
-                        <th>Invitation</th>
+                        <th>{pilot ? 'Setup' : 'Invitation'}</th>
                         <th>Assignment</th>
                         <th>
                           <span className="sr-only">Manage</span>
@@ -132,7 +135,9 @@ export function Dashboard({
                           </td>
                           <td>
                             <span className="status">
-                              {invitationState(row.latestInvitation, now)}
+                              {pilot
+                                ? recorderSetupState(row)
+                                : invitationState(row.latestInvitation, now)}
                             </span>
                           </td>
                           <td className="capitalize">{row.status}</td>
@@ -159,7 +164,7 @@ export function Dashboard({
                   </h3>
                   <p>
                     {pilot
-                      ? 'Add your NotePin S or Note Pro using its full serial number. Then create a setup link to install and connect the phone app.'
+                      ? 'Add your NotePin S or Note Pro using its full serial number, here or in the phone app.'
                       : 'Assign a supported Plaud recorder to a person, then create their enrollment invitation.'}
                   </p>
                   {!workspace.busy && (
@@ -194,8 +199,8 @@ export function Dashboard({
             />
           </div>
           <p className="workspace-footnote">
-            On your phone, use “Continue on this phone.” On a computer, scan the QR with your phone
-            camera. Bluetooth pairing happens in the installed Aptly Able app.
+            Install Aptly Able and sign in on your phone to find your recorder. QR invitations are
+            optional; Bluetooth pairing happens in the phone app.
           </p>
         </main>
       </div>

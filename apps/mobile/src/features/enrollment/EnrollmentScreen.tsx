@@ -1,20 +1,26 @@
 import { RecorderPhoto } from '../recorder/RecorderPhoto';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { usePathname, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button, Card, Screen } from '../../ui/components';
 import { fontFamily, useTheme } from '../../ui/theme';
 import { LocalAccessCard } from '../session/LocalAccessCard';
 import { parseEnrollmentInput } from './enrollment-link';
+import { AccountRecorderSetup } from './AccountRecorderSetup';
 import { useEnrollmentController, useEnrollmentSnapshot } from './use-enrollment';
 
 export default function EnrollmentScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const controller = useEnrollmentController();
   const state = useEnrollmentSnapshot();
   const { colors } = useTheme();
+  const [showInvitation, setShowInvitation] = useState(false);
+  useEffect(() => {
+    if (state.phase === 'saved' && pathname !== '/recorder') router.replace('/recorder');
+  }, [state.phase, pathname, router]);
   const [manual, setManual] = useState('');
   const [inputMessage, setInputMessage] = useState<string | null>(null);
   const needsSignIn = state.phase === 'signed-out' || state.phase === 'signing-in';
@@ -39,15 +45,15 @@ export default function EnrollmentScreen() {
     <Screen>
       <View style={styles.header}>
         <Text style={[styles.eyebrow, { color: colors.orangeInk }]}>
-          {needsSignIn ? 'APTLY ABLE' : 'RECORDER ENROLLMENT'}
+          {needsSignIn ? '1 · YOUR ACCOUNT' : '2 · YOUR RECORDER'}
         </Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.ink }]}>
-          {needsSignIn ? 'Welcome' : 'Set up your assigned recorder'}
+          {needsSignIn ? 'Welcome to Aptly Able' : 'Set up your recorder'}
         </Text>
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
           {needsSignIn
-            ? 'Sign in to access your recorder and recordings.'
-            : 'Accept your recorder invitation, then connect with Bluetooth.'}
+            ? 'Sign in or create an account to get started.'
+            : 'Choose your recorder, then we’ll help you connect it. No QR code needed.'}
         </Text>
       </View>
 
@@ -65,13 +71,48 @@ export default function EnrollmentScreen() {
             >
               Invitation received. Sign in above to continue setting up your recorder.
             </Text>
-          ) : (
+          ) : null}
+        </>
+      ) : null}
+
+      {state.phase === 'loading-recorders' ? (
+        <StatusCard
+          icon="search-outline"
+          title="Finding your recorders"
+          copy="Checking what’s already saved to your account…"
+        />
+      ) : null}
+      {state.phase === 'choosing-recorder' || state.phase === 'adding-recorder' ? (
+        <AccountRecorderSetup />
+      ) : null}
+      {state.phase === 'account-error' ? (
+        <>
+          <StatusCard
+            icon="cloud-offline-outline"
+            title="Could not load your recorders"
+            copy={state.message ?? 'Check your internet connection and try again.'}
+            danger
+          />
+          <Button label="Try again" onPress={() => void controller.loadRecorders()} />
+        </>
+      ) : null}
+      {['choosing-recorder', 'account-error'].includes(state.phase) || needsSignIn ? (
+        <>
+          <Button
+            variant="text"
+            label={showInvitation ? 'Hide invitation options' : 'Have an invitation link?'}
+            onPress={() => setShowInvitation(!showInvitation)}
+          />
+          {showInvitation && (
             <InvitationEntry
               value={manual}
               message={inputMessage}
               onChange={setManual}
               onSubmit={acceptManual}
             />
+          )}
+          {!needsSignIn && (
+            <Button variant="text" label="Sign out" onPress={() => void controller.signOut()} />
           )}
         </>
       ) : null}
@@ -88,6 +129,11 @@ export default function EnrollmentScreen() {
             message={inputMessage}
             onChange={setManual}
             onSubmit={acceptManual}
+          />
+          <Button
+            variant="text"
+            label="Back to my recorders"
+            onPress={() => void controller.loadRecorders()}
           />
           <Button variant="text" label="Sign out" onPress={() => void controller.signOut()} />
         </>
@@ -115,8 +161,7 @@ export default function EnrollmentScreen() {
             {modelName(state.preview.recorder.model)} · •••• {state.preview.recorder.serialSuffix}
           </Text>
           <Text style={[styles.cardCopy, { color: colors.inkSecondary }]}>
-            Continue to save this assignment, then connect the recorder with Bluetooth in the
-            installed phone app.
+            Continue to connect this recorder with Bluetooth.
           </Text>
           <Button label="Continue setup" onPress={() => void controller.claim()} />
           <Button
@@ -131,29 +176,17 @@ export default function EnrollmentScreen() {
       {state.phase === 'claiming' ? (
         <StatusCard
           icon="cloud-upload-outline"
-          title="Saving enrollment"
-          copy="Keep this screen open while your enrollment is saved."
+          title="Preparing your recorder"
+          copy="Saving your setup so you can pick up where you left off."
         />
       ) : null}
 
       {state.phase === 'saved' ? (
-        <Card style={styles.card}>
-          <View style={[styles.icon, { backgroundColor: colors.mintBg }]}>
-            <Ionicons name="checkmark-circle-outline" size={30} color={colors.mintInk} />
-          </View>
-          <Text style={[styles.cardTitle, { color: colors.ink }]}>Enrollment saved</Text>
-          <Text style={[styles.cardCopy, { color: colors.inkSecondary }]}>
-            Your assignment is saved. Open Recorder in the phone app to finish connecting with
-            Bluetooth.
-          </Text>
-          <Button label="Open Recorder" onPress={() => router.push('/recorder')} />
-          <Button
-            variant="secondary"
-            label="Refresh status"
-            onPress={() => void controller.refresh()}
-          />
-          <Button variant="text" label="Sign out" onPress={() => void controller.signOut()} />
-        </Card>
+        <StatusCard
+          icon="bluetooth-outline"
+          title="Opening your recorder"
+          copy="Next, connect your recorder with Bluetooth."
+        />
       ) : null}
 
       {state.phase === 'revoked' ? (
@@ -247,15 +280,10 @@ function InvitationEntry({
     <Card style={styles.entry}>
       <Text style={[styles.entryTitle, { color: colors.ink }]}>Invitation</Text>
       <Text style={[styles.cardCopy, { color: colors.inkSecondary }]}>
-        Open your setup link on this phone, scan a QR shown on another screen, or paste the link
-        below. Need an invitation? Add your recorder in the website’s recorder workspace; a computer
-        is optional.
+        If someone sent you a setup link, paste it below. You can also scan their QR with your phone
+        camera.
       </Text>
-      <Button
-        variant="text"
-        label="Get a setup link on this phone"
-        onPress={() => void openWorkspace()}
-      />
+      <Button variant="text" label="Open recorder website" onPress={() => void openWorkspace()} />
       {workspaceError && (
         <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>
           Open plaud.aptlyable.info in your phone’s browser, sign in, then add your recorder and

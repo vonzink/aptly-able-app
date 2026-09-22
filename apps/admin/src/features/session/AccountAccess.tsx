@@ -91,9 +91,13 @@ export function AccountAccess({
             <span>Great conversations.</span> <span>A simple start.</span>
           </h1>
           <p>
-            Create your account, add your Plaud recorder, and scan your QR to set up the phone app.
+            Install Aptly Able and set up your recorder on your phone. Or sign in here to manage
+            your recorders.
           </p>
         </div>
+        <a className="button primary" href="/enroll">
+          Get the phone app
+        </a>
         <div className="access-product">
           <img src="/plaud-recorder.png" alt="Plaud recorder" />
           <span>One account for your dashboard and phone.</span>
@@ -105,7 +109,7 @@ export function AccountAccess({
           <h2>{mode === 'register' ? 'Create your account' : 'Welcome back'}</h2>
           <p>
             {mode === 'register'
-              ? 'Start here. You’ll add your recorder after creating your account.'
+              ? 'Create an account for the website and phone app.'
               : 'Use the same account as the Aptly Able phone app.'}
           </p>
           {!config ? (

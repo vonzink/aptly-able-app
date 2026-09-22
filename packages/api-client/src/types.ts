@@ -1,6 +1,9 @@
 import type { z } from 'zod';
 import type {
   AdminAssignment,
+  AccountRecorder,
+  AccountRecorders,
+  RecorderSetupInput,
   RecorderAssignment,
   CreateAssignmentInput,
   EnrollmentInvitation,
@@ -13,6 +16,9 @@ import type {
 
 export type RequestOptions = { signal?: AbortSignal };
 export interface ApiClient {
+  myRecorders(options?: RequestOptions): Promise<AccountRecorders>;
+  addMyRecorder(input: RecorderSetupInput, options?: RequestOptions): Promise<AccountRecorder>;
+  beginRecorderSetup(assignmentId: string, options?: RequestOptions): Promise<SetupOperation>;
   session(options?: RequestOptions): Promise<SessionResponse>;
   adminUsers(
     page?: number,

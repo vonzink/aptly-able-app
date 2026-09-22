@@ -6,12 +6,15 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, PageHeader, Screen } from '../ui/components';
 import { fontFamily, useTheme } from '../ui/theme';
 import { usePlaudDevice } from '../features/plaud-device/use-plaud-device';
+import { useEnrollmentSnapshot } from '../bootstrap/AppProviders';
 import { getRecorderNotice } from '../features/plaud-device/recorder-notice';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { snapshot } = usePlaudDevice();
+  const enrollment = useEnrollmentSnapshot();
+  const needsSetup = !enrollment.operation;
   const recorder = getRecorderNotice(
     snapshot,
     Constants.expoConfig?.extra?.recorderMode === 'mock',
@@ -42,7 +45,17 @@ export default function HomeScreen() {
           Receive audio directly from your paired Plaud into your library. Choose Keep offline in
           app to retain audio on this phone; temporary copies can be cleared to save space.
         </Text>
-        <Button label="Open recordings" onPress={() => router.push('/recordings')} />
+        <Button
+          label={needsSetup ? 'Set up my recorder' : 'Open recordings'}
+          onPress={() => router.push(needsSetup ? '/recorder' : '/recordings')}
+        />
+        {needsSetup && (
+          <Button
+            variant="text"
+            label="Use recordings without a recorder"
+            onPress={() => router.push('/recordings')}
+          />
+        )}
       </Card>
       <View style={local.steps}>
         <Step

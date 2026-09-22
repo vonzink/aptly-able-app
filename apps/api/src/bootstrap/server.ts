@@ -1,3 +1,4 @@
+import { createRecorderSetupService } from '../modules/recorder-setup/service.js';
 import { createAccountDeletionService } from '../modules/account-deletion/service.js';
 import { createPilotIdentity } from '../modules/identity/pilot-identity.js';
 import { createPlaudDeviceProvider } from '../modules/plaud-devices/provider.js';
@@ -59,6 +60,7 @@ try {
       ? {
           recordings: createProcessingService(database.pool, storage, database.uploadPool),
           enrollments: createEnrollmentService(database.pool),
+          recorderSetup: createRecorderSetupService(database.pool),
           adminQueries: createAdminEnrollmentQueries(database.pool),
         }
       : {}),

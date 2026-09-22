@@ -1,4 +1,10 @@
 import type { AdminAssignment } from '@aptly/contracts';
+export function recorderSetupState(assignment: AdminAssignment) {
+  if (assignment.status === 'released') return 'Released';
+  if (assignment.status === 'revoked' || assignment.latestOperation?.status === 'revoked')
+    return 'Setup revoked';
+  return assignment.latestOperation?.status === 'pending' ? 'Setup saved' : 'Ready for setup';
+}
 export function invitationState(invitation: AdminAssignment['latestInvitation'], now = Date.now()) {
   if (!invitation) return 'Not sent';
   if (invitation.revokedAt) return 'Revoked';

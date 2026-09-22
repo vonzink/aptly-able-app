@@ -5,12 +5,17 @@ export function installationLink(href: string) {
   const fragment = new URLSearchParams(url.hash.slice(1));
   const token = enrollmentTokenSchema.safeParse(fragment.get('token'));
   const platform = url.searchParams.get('platform');
+  const hasToken = fragment.has('token') || url.searchParams.has('token');
+  const valid =
+    token.success && !url.searchParams.has('token') && fragment.getAll('token').length === 1;
   return {
+    invitation: !hasToken ? 'none' : valid ? 'valid' : 'invalid',
     platform: (platform === 'ios' || platform === 'android'
       ? platform
       : null) as EnrollmentPlatform | null,
-    appUrl:
-      token.success && !url.searchParams.has('token') && fragment.getAll('token').length === 1
+    appUrl: !hasToken
+      ? 'aptlyable://recorder'
+      : valid
         ? `aptlyable://enroll#${new URLSearchParams({ token: token.data })}`
         : null,
   };

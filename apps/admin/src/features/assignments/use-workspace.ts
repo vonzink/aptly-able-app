@@ -149,7 +149,7 @@ export function useWorkspace(api: ApiClient, onExpired: () => void) {
         setPage(1);
         setHasMore(list.hasMore);
         setNotice(
-          'Recorder added. Choose Android or iPhone under Phone setup, then select Create setup link & QR.',
+          'Recorder added. Sign in to the phone app with the assigned account to connect it. A QR invitation is optional.',
         );
       }),
     clearInvitation: () => setInvitation(null),

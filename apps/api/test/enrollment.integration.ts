@@ -48,6 +48,7 @@ describe('enrollment persistence', () => {
       '004_pilot_accounts.sql',
       '005_account_deletion.sql',
       '006_account_deletion_deadline.sql',
+      '007_account_recorder_setup.sql',
     ]);
     await pool.query('UPDATE schema_migrations SET checksum = $1 WHERE version = $2', [
       '0'.repeat(64),

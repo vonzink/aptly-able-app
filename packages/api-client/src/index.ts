@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  accountRecorderSchema,
+  accountRecordersSchema,
   adminAssignmentSchema,
   adminAssignmentsResponseSchema,
   adminUsersResponseSchema,
@@ -19,6 +21,7 @@ export type { TranscriptionClient, UploadRequestOptions } from './transcription.
 
 const messages: Record<string, string> = {
   UNAUTHORIZED: 'Your access code was not accepted. Sign in again.',
+  SETUP_REVOKED: 'Setup access was revoked. Ask your administrator for a new invitation.',
   FORBIDDEN: 'This account does not have access to this action.',
   ENROLLMENT_UNAVAILABLE:
     'This invitation is unavailable for your account. Ask your administrator for a new invitation.',
@@ -112,6 +115,12 @@ export function createApiClient({
   const id = (value: string) => encodeURIComponent(z.uuid().parse(value));
   const pageNumber = (value: number) => z.number().int().min(1).max(100000).parse(value);
   return {
+    myRecorders: (options) =>
+      request('/v1/me/recorders', accountRecordersSchema, undefined, options),
+    addMyRecorder: (body, options) =>
+      request('/v1/me/recorders', accountRecorderSchema, body, options),
+    beginRecorderSetup: (assignmentId, options) =>
+      request(`/v1/me/recorders/${id(assignmentId)}/setup`, setupOperationSchema, {}, options),
     session: (options) => request('/v1/session', sessionResponseSchema, undefined, options),
     adminUsers: (page = 1, options) =>
       request(

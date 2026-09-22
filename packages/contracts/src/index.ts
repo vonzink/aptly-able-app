@@ -8,3 +8,4 @@ export * from './plaud-device.js';
 export * from './auth.js';
 
 export * from './account.js';
+export * from './recorder-setup.js';

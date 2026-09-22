@@ -4,11 +4,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { useEnrollmentController, useEnrollmentSnapshot } from '../../bootstrap/AppProviders';
+import { useEnrollmentSnapshot } from '../../bootstrap/AppProviders';
 import { Button, Card, Screen } from '../../ui/components';
 import { ConfirmationDialog } from '../../ui/ConfirmationDialog';
 import { fontFamily, useTheme } from '../../ui/theme';
-import { LocalAccessCard } from '../session/LocalAccessCard';
+import EnrollmentScreen from '../enrollment/EnrollmentScreen';
 import { RecorderIdentityCard } from '../recorder/RecorderIdentityCard';
 import { RecorderPairingCard } from './RecorderPairingCard';
 import { PlaudRecorderControls } from './PlaudRecorderControls';
@@ -49,7 +49,6 @@ const progress: Partial<Record<PlaudDevicePhase, { title: string; copy: string }
 export default function PlaudDeviceScreen() {
   const { controller, snapshot } = usePlaudDevice();
   const { snapshot: sync } = usePlaudSync();
-  const enrollmentController = useEnrollmentController();
   const enrollment = useEnrollmentSnapshot();
   const router = useRouter();
   const { colors } = useTheme();
@@ -67,11 +66,14 @@ export default function PlaudDeviceScreen() {
     }
   }
 
+  if (snapshot.phase !== 'unavailable' && (!enrollment.actorId || !enrollment.operation))
+    return <EnrollmentScreen />;
+
   return (
     <Screen>
       <View style={styles.header}>
         <Text style={[styles.eyebrow, { color: colors.orangeInk }]}>
-          {enrollment.operation ? 'YOUR ASSIGNED RECORDER' : 'YOUR RECORDER'}
+          {snapshot.phase === 'ready' ? 'YOUR RECORDER' : '3 · CONNECT'}
         </Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.ink }]}>
           {snapshot.phase === 'ready'
@@ -96,35 +98,10 @@ export default function PlaudDeviceScreen() {
             your NotePin S. Bluetooth recorder connection is unavailable in a browser or Expo Go.
           </Text>
           <Button
-            label="Open recorder enrollment"
+            label="Set up my recorder"
             variant="secondary"
             onPress={() => router.push('/enroll')}
           />
-        </Card>
-      ) : !enrollment.actorId ? (
-        <LocalAccessCard
-          loading={enrollment.phase === 'signing-in'}
-          message={enrollment.message}
-          onSubmit={(code) => void enrollmentController.signIn(code)}
-        />
-      ) : !enrollment.operation ? (
-        <Card style={styles.card}>
-          <Text style={[styles.cardTitle, { color: colors.ink }]}>No recorder connected</Text>
-          <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-            Open an enrollment invitation to add a recorder. After unpairing, create a new
-            assignment and invitation in the dashboard to set it up again.
-          </Text>
-          {enrollment.message ? (
-            <Text style={[styles.copy, { color: colors.inkSecondary }]}>{enrollment.message}</Text>
-          ) : null}
-          {enrollment.phase === 'recovery-error' ? (
-            <Button
-              label="Retry enrollment recovery"
-              variant="secondary"
-              onPress={() => void enrollmentController.retryRecovery()}
-            />
-          ) : null}
-          <Button label="Open recorder enrollment" onPress={() => router.push('/enroll')} />
         </Card>
       ) : (
         <>
@@ -297,7 +274,7 @@ export default function PlaudDeviceScreen() {
             snapshot.phase === 'ready' ||
             !activeOperation) ? (
             <RecorderPairingCard
-              key={`${enrollment.actorId}:${enrollment.operation.id}:${snapshot.assignment?.serial}`}
+              key={`${enrollment.actorId}:${enrollment.operation?.id}:${snapshot.assignment?.serial}`}
             />
           ) : null}
         </>

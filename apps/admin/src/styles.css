@@ -853,8 +853,11 @@ dd {
     margin-top: 20px;
   }
   .topbar {
-    height: 62px;
-    padding: 0 20px;
+    min-height: 62px;
+    height: auto;
+    padding: 8px 20px;
+    flex-wrap: wrap;
+    gap: 4px 12px;
   }
   .dashboard {
     padding: 23px 16px;

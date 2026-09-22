@@ -10,6 +10,8 @@ import type { PlaudSyncSnapshot } from '../src/features/plaud-device/plaud-sync-
 const privateValue = 'PRIVATE-DO-NOT-COPY';
 const enrollment: EnrollmentSnapshot = {
   phase: 'saved',
+  recorders: [],
+  canAddRecorder: false,
   hasInvitation: false,
   actorId: privateValue,
   accountEmail: `${privateValue}@example.com`,

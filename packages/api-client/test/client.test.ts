@@ -3,6 +3,48 @@ import { ApiError, createApiClient } from '../src/index.js';
 const userId = '8cd7c040-9c09-4629-b1a1-9e8dfecf4e10';
 
 describe('shared API boundary', () => {
+  it('sets up an account-owned recorder without carrying an invitation or user ID', async () => {
+    const recorder = {
+      assignmentId: userId,
+      recorder: { id: userId, model: 'notepins', serialSuffix: '1234' },
+      operation: null,
+      setupBlocked: false,
+    };
+    const operation = {
+      id: userId,
+      assignmentId: userId,
+      status: 'pending',
+      createdAt: '2026-09-22T12:00:00Z',
+    };
+    const responses = [{ recorders: [recorder], canAdd: true }, recorder, operation];
+    const calls: { url: string; body: unknown; authorization: string | null }[] = [];
+    const client = createApiClient({
+      baseUrl: 'http://localhost:4100',
+      getCredential: () => 'test-session',
+      fetch: async (url, init) => {
+        calls.push({
+          url: String(url),
+          body: init?.body ? JSON.parse(String(init.body)) : null,
+          authorization: new Headers(init?.headers).get('authorization'),
+        });
+        return new Response(JSON.stringify(responses.shift()));
+      },
+    });
+    expect((await client.myRecorders()).recorders).toEqual([recorder]);
+    await client.addMyRecorder({ model: 'notepins', serial: '882B900001234' });
+    expect(await client.beginRecorderSetup(userId)).toEqual(operation);
+    expect(calls.map((c) => c.url)).toEqual([
+      'http://localhost:4100/v1/me/recorders',
+      'http://localhost:4100/v1/me/recorders',
+      `http://localhost:4100/v1/me/recorders/${userId}/setup`,
+    ]);
+    expect(calls.map((c) => c.body)).toEqual([
+      null,
+      { model: 'notepins', serial: '882B900001234' },
+      {},
+    ]);
+    expect(calls.every((c) => c.authorization === 'Bearer test-session')).toBe(true);
+  });
   it('keeps credentials and invitation secrets out of URLs and validates responses', async () => {
     const fetcher = vi.fn(
       async () =>

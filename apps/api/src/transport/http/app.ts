@@ -1,3 +1,5 @@
+import type { RecorderSetupService } from '../../modules/recorder-setup/service.js';
+import { registerRecorderSetupRoutes } from './recorder-setup-routes.js';
 import {
   AccountDeletionError,
   type AccountDeletionService,
@@ -31,6 +33,7 @@ type AppDependencies = {
   logger?: boolean;
   enrollments?: EnrollmentService;
   adminQueries?: AdminEnrollmentQueries;
+  recorderSetup?: RecorderSetupService;
   recordings?: ProcessingService;
   transcriptionAvailable?: boolean;
   plaudDevices?: PlaudDeviceService;
@@ -43,6 +46,7 @@ export function buildApp({
   logger = false,
   enrollments,
   adminQueries,
+  recorderSetup,
   recordings,
   transcriptionAvailable = false,
   plaudDevices,
@@ -66,6 +70,7 @@ export function buildApp({
       return development.verify(authorization) ?? (await pilot?.verify(authorization));
     },
   };
+  registerRecorderSetupRoutes(app, identity, recorderSetup);
   registerAccountRoutes(app, accountDeletion);
   registerAuthRoutes(app, pilot, !!config.developmentIdentity || !!config.developmentAdminIdentity);
   app.addHook('onRequest', async (_request, reply) => {

@@ -1,5 +1,10 @@
 import type { ApiClient, SessionController } from '@aptly/api-client';
-import type { EnrollmentPreview, SetupOperation } from '@aptly/contracts';
+import type {
+  AccountRecorder,
+  RecorderSetupInput,
+  EnrollmentPreview,
+  SetupOperation,
+} from '@aptly/contracts';
 
 export type EnrollmentJournal = { actorId: string; key: string; operationId?: string };
 export interface EnrollmentJournalStore {
@@ -9,6 +14,10 @@ export interface EnrollmentJournalStore {
 }
 
 type Phase =
+  | 'loading-recorders'
+  | 'choosing-recorder'
+  | 'adding-recorder'
+  | 'account-error'
   | 'signed-out'
   | 'signing-in'
   | 'resolving'
@@ -25,6 +34,8 @@ export type EnrollmentSnapshot = {
   phase: Phase;
   /** Presence only: invitation secrets never enter the render/diagnostic snapshot. */
   hasInvitation: boolean;
+  recorders: AccountRecorder[];
+  canAddRecorder: boolean;
   actorId: string | null;
   /** Display-only sign-in email; never persisted in the enrollment journal or diagnostics. */
   accountEmail: string | null;
@@ -55,11 +66,16 @@ export interface EnrollmentController {
   claim(): Promise<void>;
   refresh(): Promise<void>;
   signOut(): Promise<void>;
+  loadRecorders(): Promise<void>;
+  addRecorder(input: RecorderSetupInput): Promise<void>;
+  selectRecorder(assignmentId: string): Promise<void>;
 }
 
 const initial: EnrollmentSnapshot = {
   phase: 'signed-out',
   hasInvitation: false,
+  recorders: [],
+  canAddRecorder: false,
   actorId: null,
   accountEmail: null,
   preview: null,
@@ -193,12 +209,13 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     await writeJournal(() => deps.journal.clear());
     if (!active(requestGeneration)) return;
     update({
-      phase: 'needs-invitation',
+      phase: 'choosing-recorder',
+      recorders: [],
       preview: null,
       operation: null,
-      message:
-        'Recorder unpaired. Its dashboard assignment and saved phone enrollment have been removed. Create a new assignment and enrollment invitation to connect a recorder.',
+      message: 'Recorder unpaired and removed from your account. Add a recorder to set up again.',
     });
+    await discoverRecorders(requestGeneration, false);
   }
 
   async function recoverJournal(
@@ -273,7 +290,7 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
         if (recovery === 'recovered' || recovery === 'failed') return;
       }
       if (invitation) await resolveForGeneration(requestGeneration);
-      else update({ phase: 'needs-invitation', message: 'Please scan or enter your invitation.' });
+      else await discoverRecorders(requestGeneration);
     } catch {
       if (active(requestGeneration))
         update({
@@ -391,12 +408,135 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     return claimPromise;
   }
 
+  async function saveAccountOperation(operation: SetupOperation, own: number) {
+    if (!active(own) || !snapshot.actorId) return;
+    const journal = {
+      actorId: snapshot.actorId,
+      key: deps.createIdempotencyKey(),
+      operationId: operation.id,
+    };
+    await writeJournal(() => deps.journal.save(journal));
+    if (!active(own)) return;
+    savedJournal = journal;
+    invitation = null;
+    update({
+      operation,
+      phase: operation.status === 'pending' ? 'saved' : 'revoked',
+      message: null,
+    });
+  }
+
+  async function discoverRecorders(own: number, resume = true) {
+    if (!snapshot.actorId) return;
+    update({ phase: 'loading-recorders', message: null });
+    try {
+      const result = await deps.client.myRecorders({ signal: requestSignal() });
+      if (!active(own)) return;
+      // A link received during authentication takes precedence over account discovery.
+      if (invitation) {
+        await resolveForGeneration(own);
+        return;
+      }
+      update({ recorders: result.recorders, canAddRecorder: result.canAdd });
+      const only = result.recorders.length === 1 ? result.recorders[0] : null;
+      if (resume && only?.operation?.status === 'pending' && !only.setupBlocked) {
+        await saveAccountOperation(only.operation, own);
+      } else update({ phase: 'choosing-recorder' });
+    } catch (error) {
+      if (!active(own)) return;
+      // Roll out the API first. An older API still supports the existing invitation path.
+      update({
+        phase: statusOf(error) === 404 ? 'needs-invitation' : 'account-error',
+        message:
+          statusOf(error) === 404
+            ? 'This server still uses setup links. Open your invitation, or get one from the website.'
+            : 'Could not load your recorders. Check your connection and try again.',
+      });
+    }
+  }
+  async function loadRecorders() {
+    if (
+      !snapshot.actorId ||
+      claimPromise ||
+      snapshot.phase === 'adding-recorder' ||
+      snapshot.phase === 'signing-in'
+    )
+      return;
+    if (snapshot.operation) return;
+    const own = ++generation;
+    cancelRequest();
+    invitation = null;
+    update({ preview: null });
+    await discoverRecorders(own);
+  }
+  async function addRecorder(input: RecorderSetupInput) {
+    if (!snapshot.actorId || !snapshot.canAddRecorder || snapshot.phase !== 'choosing-recorder')
+      return;
+    const own = ++generation;
+    cancelRequest();
+    update({ phase: 'adding-recorder', message: null });
+    try {
+      const recorder = await deps.client.addMyRecorder(input, { signal: requestSignal() });
+      if (!active(own)) return;
+      update({
+        phase: 'choosing-recorder',
+        recorders: [
+          recorder,
+          ...snapshot.recorders.filter((r) => r.assignmentId !== recorder.assignmentId),
+        ],
+        message: 'Recorder added. Continue below to connect it.',
+      });
+    } catch (error) {
+      if (active(own))
+        update({
+          phase: 'choosing-recorder',
+          message: safeMessage(error, 'Could not add your recorder. Try again.'),
+        });
+    }
+  }
+  function selectRecorder(assignmentId: string): Promise<void> {
+    if (claimPromise) return claimPromise;
+    const recorder = snapshot.recorders.find((r) => r.assignmentId === assignmentId);
+    if (
+      !snapshot.actorId ||
+      !recorder ||
+      recorder.setupBlocked ||
+      snapshot.phase !== 'choosing-recorder'
+    )
+      return Promise.resolve();
+    const own = ++generation;
+    cancelRequest();
+    update({ phase: 'claiming', message: null });
+    const work = (async () => {
+      try {
+        const operation = await deps.client.beginRecorderSetup(assignmentId, {
+          signal: requestSignal(),
+        });
+        if (!active(own)) return;
+        if (operation.assignmentId !== assignmentId)
+          throw new Error('Setup response did not match your recorder.');
+        await saveAccountOperation(operation, own);
+      } catch (error) {
+        if (active(own))
+          update({
+            phase: 'choosing-recorder',
+            message: safeMessage(error, 'Could not save setup. Try again safely.'),
+          });
+      }
+    })();
+    const tracked = work.finally(() => {
+      if (claimPromise === tracked) claimPromise = null;
+    });
+    claimPromise = tracked;
+    return tracked;
+  }
+
   async function retryRecovery() {
     const requestGeneration = generation;
     const recovery = await recoverJournal(requestGeneration);
     if (recovery !== 'missing' || !active(requestGeneration)) return;
     if (invitation) await resolveForGeneration(requestGeneration);
-    else update({ phase: 'needs-invitation', message: 'Please scan your invitation again.' });
+    else await discoverRecorders(requestGeneration);
   }
 
   async function refresh() {
@@ -450,6 +590,9 @@ export function createEnrollmentController(deps: Dependencies): EnrollmentContro
     claim,
     refresh,
     signOut,
+    loadRecorders,
+    addRecorder,
+    selectRecorder,
   };
 }
 
